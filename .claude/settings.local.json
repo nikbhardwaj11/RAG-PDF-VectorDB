@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(rtk pip *)",
+      "Bash(pkill -f streamlit)",
+      "Bash(curl -s http://localhost:8501/_stcore/health)",
+      "Bash(rtk read *)",
+      "Bash(rtk ls *)",
+      "Bash(.venv/Scripts/activate)",
+      "Bash(streamlit run *)",
+      "Bash(./venv/Scripts/activate)",
+      "Bash(./venv/Scripts/streamlit.exe run *)"
+    ]
+  }
+}
