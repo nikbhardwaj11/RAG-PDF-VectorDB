@@ -1074,7 +1074,8 @@ if active_question:
                         render_cross_book_view(matches, meta.get("query_type"))
 
                     # Expandable sources
-                    with st.expander(f"📜 View Retrieved Passages ({len(matches)} chunks)"):
+                    with st.expander(f"📜 View Retrieved Passages ({len(matches)} chunks)", expanded=False):
+                        book_dist = meta.get("book_distribution", {}) if meta else {}
                         if book_dist:
                             st.markdown("**📊 Book Distribution:**")
                             render_book_distribution(book_dist)
