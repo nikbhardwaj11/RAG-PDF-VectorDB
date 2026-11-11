@@ -13,7 +13,7 @@ Key improvements:
 
 import re
 import time
-from typing import List, Dict, Any, Optional, Tuple, Set
+from typing import List, Dict, Any, Optional, Tuple
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from dotenv import load_dotenv
@@ -120,20 +120,20 @@ QUERY_PATTERNS = {
 
 # Dynamic K configuration - tuned for better coverage
 DYNAMIC_K_CONFIG = {
-    "LISTING":      {"base": 24, "per_book": 4,  "min": 18, "max": 60},
+    "LISTING":      {"base": 24, "per_book": 4,  "min": 18, "max": 80},
     "COMPARISON":   {"base": 24, "per_entity": 12, "min": 18, "max": 50},
     "TIMELINE":     {"base": 20, "per_book": 3,  "min": 15, "max": 40},
     "THEMATIC":     {"base": 12, "per_book": 2,  "min": 10, "max": 25},
     "FACTUAL":      {"base": 6,  "per_book": 1,  "min": 4,  "max": 12},
 }
 
-# Distance thresholds per query type
+# Distance thresholds per query type - tuned for diverse literary styles and multi-book collections
 DISTANCE_THRESHOLDS = {
-    "LISTING":     {"strict": 0.65, "loose": 0.75, "gap": 0.12},
-    "COMPARISON":  {"strict": 0.60, "loose": 0.68, "gap": 0.10},
-    "TIMELINE":    {"strict": 0.65, "loose": 0.72, "gap": 0.12},
-    "THEMATIC":    {"strict": 0.58, "loose": 0.68, "gap": 0.15},
-    "FACTUAL":     {"strict": 0.52, "loose": 0.60, "gap": 0.15},
+    "LISTING":     {"strict": 0.70, "loose": 0.82, "gap": 0.14},
+    "COMPARISON":  {"strict": 0.65, "loose": 0.78, "gap": 0.12},
+    "TIMELINE":    {"strict": 0.70, "loose": 0.80, "gap": 0.14},
+    "THEMATIC":    {"strict": 0.62, "loose": 0.75, "gap": 0.15},
+    "FACTUAL":     {"strict": 0.55, "loose": 0.68, "gap": 0.20},
 }
 
 # Query expansion templates per type
@@ -169,6 +169,28 @@ class RetrievalResult:
     metadata: Dict[str, Any]
 
 
+# ===================== Query Embedding Cache =====================
+_QUERY_EMBED_CACHE: Dict[str, List[float]] = {}
+MAX_QUERY_CACHE_SIZE = 256
+
+
+def get_cached_query_embedding(query_text: str) -> List[float]:
+    """
+    Get or compute embedding for a query string with in-memory caching.
+    Avoids duplicate NVIDIA embedding API calls within and across multi-turn queries.
+    """
+    cleaned = (query_text or "").strip()
+    if cleaned in _QUERY_EMBED_CACHE:
+        return _QUERY_EMBED_CACHE[cleaned]
+
+    vec = create_embeddings([cleaned], input_type="query")[0]
+    if len(_QUERY_EMBED_CACHE) >= MAX_QUERY_CACHE_SIZE:
+        # Evict oldest item
+        _QUERY_EMBED_CACHE.pop(next(iter(_QUERY_EMBED_CACHE)))
+    _QUERY_EMBED_CACHE[cleaned] = vec
+    return vec
+
+
 # ===================== Utility Functions =====================
 
 def get_book_count() -> int:
@@ -186,6 +208,18 @@ def get_chapter_count() -> int:
 
 # Curated list of known characters, entities, and settings across the active library
 CANONICAL_ENTITIES = [
+    # Mahabharata
+    "Krishna", "Arjuna", "Bhima", "Yudhishthira", "Nakula", "Sahadeva", "Draupadi",
+    "Duryodhana", "Karna", "Bhishma", "Dronacharya", "Drona", "Shakuni", "Dhritarashtra",
+    "Gandhari", "Kunti", "Pandavas", "Pandava", "Kauravas", "Kaurava", "Kurukshetra",
+    "Hastinapura", "Indraprastha", "Abhimanyu", "Dushasana", "Ashwatthama", "Vyasa",
+    "Sanjaya", "Vidura", "Balarama", "Ghatotkacha", "Subhadra", "Kripa", "Kripacharya",
+    "Shalya", "Jayadratha", "Parikshit", "Janamejaya",
+    # Ramayana
+    "Rama", "Sita", "Lakshmana", "Hanuman", "Ravana", "Dasharatha", "Kaikeyi", "Kausalya",
+    "Sumitra", "Bharata", "Shatrughna", "Sugriva", "Vali", "Vibhishana", "Kumbhakarna",
+    "Indrajit", "Meghanada", "Ayodhya", "Lanka", "Kishkindha", "Dandaka", "Vishwamitra",
+    "Janaka", "Maricha", "Surpanakha", "Jatayu", "Sampati", "Angada", "Urmila",
     # Harry Potter Universe
     "Harry Potter", "Ron Weasley", "Hermione Granger", "Lord Voldemort", "Albus Dumbledore",
     "Severus Snape", "Rubeus Hagrid", "Sirius Black", "Draco Malfoy", "Remus Lupin",
@@ -211,7 +245,7 @@ CANONICAL_ENTITIES = [
     "Gwen Stacy", "Doctor Octopus", "Doc Ock", "Otto Octavius", "Daily Bugle",
     "J. Jonah Jameson", "Flash Thompson", "Venom", "Carnage",
     # The Old Man and the Sea
-    "Santiago", "Manolin", "The Old Man", "Joe DiMaggio", "Marlin", "Manolin",
+    "Santiago", "Manolin", "The Old Man", "Joe DiMaggio", "Marlin",
     # Generic literary terms
     "protagonist", "antagonist", "hero", "villain", "mentor", "sidekick",
     "love interest", "companion", "ally", "enemy", "rival",
@@ -364,10 +398,6 @@ def classify_query(question: str) -> Tuple[str, float, List[str]]:
     if re.search(r'\b(all|every)\s+\w+', lower_q) or "names of all" in lower_q or "list of all" in lower_q:
         scores["LISTING"] = scores.get("LISTING", 0.0) + 1.5
 
-    # 9. "All X" / "Every X" / "Names of all" -> LISTING
-    if re.search(r'\b(all|every)\s+\w+', lower_q) or "names of all" in lower_q or "list of all" in lower_q:
-        scores["LISTING"] = scores.get("LISTING", 0.0) + 1.5
-
     # 7. "Difference between" explicitly
     if "difference between" in lower_q or "differences between" in lower_q:
         scores["COMPARISON"] = scores.get("COMPARISON", 0.0) + 2.5
@@ -390,8 +420,11 @@ def calculate_dynamic_k(query_type: str, entities: List[str], book_count: int) -
     """Calculate optimal K with improved scaling."""
     config = DYNAMIC_K_CONFIG.get(query_type, DYNAMIC_K_CONFIG["FACTUAL"])
 
+    # For LISTING, use chapter count (actual books) for broader coverage
+    chapter_count = get_chapter_count()
+
     if query_type == "LISTING":
-        k = config["per_book"] * book_count + config["base"]
+        k = config["per_book"] * chapter_count + config["base"]
     elif query_type == "COMPARISON":
         entity_count = max(2, len(entities)) if entities else 2
         k = config["per_entity"] * entity_count
@@ -459,7 +492,31 @@ def rerank_chunks(chunks: List[Dict[str, Any]], question: str, query_type: str,
             page = chunk.get("page", 1)
             position_score = max(0.0, 0.05 - (page * 0.00005))
 
-        chunk["rerank_score"] = dist_score + entity_score + term_score + position_score
+        # 5. Book title affinity bonus (if question terms match the book or file name)
+        book_title_lower = chunk.get("book_title", "").lower()
+        filename_lower = chunk.get("filename", "").lower()
+        title_boost = 0.0
+        if any(term in book_title_lower or term in filename_lower for term in question_terms if len(term) >= 4):
+            title_boost = 0.10
+
+        chunk["rerank_score"] = dist_score + entity_score + term_score + position_score + title_boost
+
+    # For cross-book synthesis (LISTING, COMPARISON, TIMELINE), perform round-robin interleaving
+    # so every represented book gets fair, balanced representation rather than one book dominating
+    if query_type in ("LISTING", "COMPARISON", "TIMELINE"):
+        by_book = defaultdict(list)
+        for c in sorted(chunks, key=lambda x: x.get("rerank_score", 0), reverse=True):
+            by_book[c.get("book_title", "Unknown")].append(c)
+
+        balanced = []
+        max_depth = max((len(v) for v in by_book.values()), default=0)
+        for depth in range(max_depth):
+            for book_title in sorted(by_book.keys()):
+                if depth < len(by_book[book_title]):
+                    balanced.append(by_book[book_title][depth])
+                    if len(balanced) >= top_k:
+                        return balanced
+        return balanced[:top_k]
 
     # Sort descending by rerank score
     reranked = sorted(chunks, key=lambda c: c.get("rerank_score", 0), reverse=True)
@@ -496,19 +553,22 @@ def strategy_stratified_listing(
     If an entity is specified (e.g. 'associated with Harry Potter'), focuses retrieval
     on relevant story contexts while retaining breadth.
     """
-    per_book_k = max(3, final_k // max(1, book_count))
+    # For LISTING, use chapter count (actual books) for balanced per-book allocation
+    chapter_count = get_chapter_count()
+    per_book_k = max(3, final_k // max(1, min(chapter_count, 15)))
 
     # If user asked about a specific entity/series
     if entities and len(entities) > 0:
         primary_entity = entities[0]
         entity_query = f"{primary_entity} characters allies enemies friends associates students teachers members family"
-        q_vector = create_embeddings([entity_query], input_type="query")[0]
+        q_vector = get_cached_query_embedding(entity_query)
         chunks = search_chunks_by_entity(
             entity_name=primary_entity,
             query_vector=q_vector,
             per_book_k=per_book_k * 2,
             max_distance=0.82,
             top_k=final_k * 2,
+            book_filter=book_filter,
         )
         if len(chunks) < final_k // 2:
             extra = search_chunks_hybrid(q_vector, entity_query, top_k=final_k, book_filter=book_filter)
@@ -517,7 +577,7 @@ def strategy_stratified_listing(
 
     # General listing across all books in the library
     expanded_q = build_expanded_query(question, "LISTING")
-    q_vector = create_embeddings([expanded_q], input_type="query")[0]
+    q_vector = get_cached_query_embedding(expanded_q)
 
     chunks = search_chunks_stratified(
         query_vector=q_vector,
@@ -540,7 +600,7 @@ def strategy_stratified_listing(
 
     # If still no chunks, fall back to hybrid search
     if not chunks:
-        fallback_vec = create_embeddings([question], input_type="query")[0]
+        fallback_vec = get_cached_query_embedding(question)
         chunks = search_chunks_hybrid(fallback_vec, question, final_k, book_filter)
 
     return chunks[:final_k]
@@ -565,7 +625,7 @@ def strategy_entity_comparison(
         for entity in target_entities:
             # Build focused entity query
             entity_query = f"{entity} character personality traits relationships development story arc actions motivations conflicts"
-            q_vec = create_embeddings([entity_query], input_type="query")[0]
+            q_vec = get_cached_query_embedding(entity_query)
 
             entity_chunks = search_chunks_by_entity(
                 entity_name=entity,
@@ -573,6 +633,7 @@ def strategy_entity_comparison(
                 per_book_k=4,
                 max_distance=0.82,
                 top_k=per_entity_k * 2,
+                book_filter=book_filter,
             )
             # Rerank for this entity
             entity_chunks = rerank_chunks(entity_chunks, entity_query, "COMPARISON", [entity], per_entity_k)
@@ -591,21 +652,21 @@ def strategy_entity_comparison(
         if balanced:
             return balanced[:final_k]
 
-    # Implicit comparison across all books - compare protagonists/main characters
-    character_query = "main character protagonist hero personality development relationships story arc motivations"
-    q_vec = create_embeddings([character_query], input_type="query")[0]
-    per_book_k = max(3, final_k // max(1, book_count))
+    # Implicit comparison across all books - compare subjects/characters from the question
+    character_query = f"{question} main character protagonist hero personality development relationships story arc motivations differences similarities"
+    q_vec = get_cached_query_embedding(character_query)
+    per_book_k = max(3, final_k // max(1, min(book_count, 10)))
 
     chunks = search_chunks_stratified(
         query_vector=q_vec,
         per_book_k=per_book_k,
-        fts_query="character protagonist hero main personality development",
-        book_filter=None,
+        fts_query=f"{question} character protagonist hero main",
+        book_filter=book_filter,
         max_distance=0.82,
     )
 
     if not chunks:
-        fallback_vec = create_embeddings([question], input_type="query")[0]
+        fallback_vec = get_cached_query_embedding(question)
         chunks = search_chunks_hybrid(fallback_vec, question, final_k, book_filter)
 
     chunks = rerank_chunks(chunks, question, "COMPARISON", [], final_k)
@@ -630,7 +691,7 @@ def strategy_entity_timeline(
 
     # Build timeline-focused query
     q_text = f"{target_entity} major events key moments actions decisions consequences timeline story arc journey life"
-    q_vec = create_embeddings([q_text], input_type="query")[0]
+    q_vec = get_cached_query_embedding(q_text)
 
     chunks = search_chunks_by_entity(
         entity_name=target_entity,
@@ -638,6 +699,7 @@ def strategy_entity_timeline(
         per_book_k=6,
         max_distance=0.82,
         top_k=final_k * 2,
+        book_filter=book_filter,
     )
 
     # Fallback if sparse
@@ -652,7 +714,7 @@ def strategy_entity_timeline(
 
     # Final fallback if still no chunks
     if not chunks:
-        fallback_vec = create_embeddings([question], input_type="query")[0]
+        fallback_vec = get_cached_query_embedding(question)
         chunks = search_chunks_hybrid(fallback_vec, question, final_k, book_filter)
 
     # Rerank with timeline awareness
@@ -674,7 +736,7 @@ def strategy_hybrid_precision(
 
     # Use expanded query for better recall
     expanded_q = build_expanded_query(question, "FACTUAL")
-    q_vec = create_embeddings([expanded_q], input_type="query")[0]
+    q_vec = get_cached_query_embedding(expanded_q)
 
     chunks = search_chunks_hybrid(
         query_vector=q_vec,
@@ -685,7 +747,7 @@ def strategy_hybrid_precision(
 
     # If hybrid returns nothing, fall back to pure vector
     if not chunks:
-        fallback_vec = create_embeddings([question], input_type="query")[0]
+        fallback_vec = get_cached_query_embedding(question)
         chunks = search_chunks(query_vector=fallback_vec, top_k=final_k, book_filter=book_filter)
 
     # Rerank for precision
@@ -710,11 +772,9 @@ def strategy_thematic_exploration(
     book_filter: Optional[str]
 ) -> List[Dict[str, Any]]:
     """Thematic query strategy with broader semantic search."""
-    thresholds = DISTANCE_THRESHOLDS["THEMATIC"]
-
     # Expand query for thematic coverage
     expanded_q = build_expanded_query(question, "THEMATIC")
-    q_vec = create_embeddings([expanded_q], input_type="query")[0]
+    q_vec = get_cached_query_embedding(expanded_q)
 
     # Use hybrid with expanded query
     chunks = search_chunks_hybrid(
@@ -725,7 +785,7 @@ def strategy_thematic_exploration(
     )
 
     # Also try pure vector with thematic query
-    thematic_vec = create_embeddings([f"theme symbolism meaning significance {question}"], input_type="query")[0]
+    thematic_vec = get_cached_query_embedding(f"theme symbolism meaning significance {question}")
     vector_chunks = search_chunks(
         query_vector=thematic_vec,
         top_k=final_k,
@@ -736,7 +796,7 @@ def strategy_thematic_exploration(
 
     # If still no chunks, fall back to hybrid with original question
     if not chunks:
-        fallback_vec = create_embeddings([question], input_type="query")[0]
+        fallback_vec = get_cached_query_embedding(question)
         chunks = search_chunks_hybrid(fallback_vec, question, final_k, book_filter)
 
     chunks = rerank_chunks(chunks, question, "THEMATIC", [], final_k)

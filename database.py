@@ -1,6 +1,5 @@
 import os
 import re
-import time
 from typing import List, Dict, Any, Optional
 
 import psycopg
@@ -18,7 +17,7 @@ PGPASSWORD = os.getenv("PGPASSWORD", "ragpassword")
 
 # Search configuration
 DEFAULT_CANDIDATE_MULTIPLIER = 4
-MAX_CANDIDATES = 200
+MAX_CANDIDATES = 400
 RRF_CONSTANT = 60
 
 # Stop words to filter out when generating keyword-based FTS search queries
@@ -103,7 +102,7 @@ def init_db():
                 cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_doc_chunks_halfvec
                     ON document_chunks USING hnsw ((embedding::halfvec(2048)) halfvec_cosine_ops)
-                    WITH (m = 16, ef_construction = 64);
+                    WITH (m = 16, ef_construction = 128);
                 """)
             except Exception as idx_err:
                 print(f"Notice: Vector index could not be created ({idx_err}), using exact search.")
@@ -146,18 +145,21 @@ def is_filename_indexed(filename: str) -> bool:
 
 # ===================== Inserts =====================
 def insert_chunks(chunks_records: List[tuple]) -> int:
-    """Batch insert chunks with embeddings."""
+    """Batch insert chunks with embeddings in chunks of 500 records."""
     if not chunks_records:
         return 0
 
     conn = get_connection()
     try:
+        batch_size = 500
         with conn.cursor() as cur:
-            cur.executemany("""
-                INSERT INTO document_chunks
-                (source_id, filename, book_title, page_number, chunk_index, content, embedding)
-                VALUES (%s, %s, %s, %s, %s, %s, %s::vector);
-            """, chunks_records)
+            for i in range(0, len(chunks_records), batch_size):
+                batch = chunks_records[i : i + batch_size]
+                cur.executemany("""
+                    INSERT INTO document_chunks
+                    (source_id, filename, book_title, page_number, chunk_index, content, embedding)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s::vector);
+                """, batch)
         conn.commit()
         return len(chunks_records)
     except Exception:
@@ -176,6 +178,25 @@ def _build_where_clause(book_filter: Optional[str]) -> tuple[str, dict]:
             {"b_filter": f"%{book_filter}%"}
         )
     return ("", {})
+
+
+def _build_filter_conditions(book_filter: Optional[str], extra_conditions: Optional[List[str]] = None) -> tuple[str, dict]:
+    """
+    Build a clean, unified WHERE clause combining book filtering and extra SQL expressions.
+    Guarantees a single valid WHERE keyword with AND-joined expressions.
+    """
+    conditions = []
+    params = {}
+    if book_filter and book_filter != "All Books":
+        conditions.append("(book_title ILIKE %(b_filter)s OR filename ILIKE %(b_filter)s)")
+        params["b_filter"] = f"%{book_filter}%"
+    if extra_conditions:
+        for c in extra_conditions:
+            if c and c.strip():
+                conditions.append(c.strip())
+    if conditions:
+        return "WHERE " + " AND ".join(conditions), params
+    return "", params
 
 
 def _row_to_dict(row: tuple) -> Dict[str, Any]:
@@ -201,27 +222,29 @@ def search_chunks(
     max_distance: Optional[float] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Pure vector cosine similarity search.
+    Pure vector cosine similarity search with proper parameter binding.
     """
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            where_clause, params = _build_where_clause(book_filter)
-            params["q_vec"] = query_vector
-            params["top_k"] = top_k
+            extra_conds = []
+            params = {
+                "q_vec": query_vector,
+                "top_k": top_k,
+            }
 
             if max_distance is not None:
                 params["max_dist"] = max_distance
-                dist_filter = "AND (embedding <=> %(q_vec)s::vector) <= %(max_dist)s"
-            else:
-                dist_filter = ""
+                extra_conds.append("(embedding <=> %(q_vec)s::vector) <= %(max_dist)s")
+
+            where_sql, filter_params = _build_filter_conditions(book_filter, extra_conds)
+            params.update(filter_params)
 
             query = f"""
                 SELECT id, filename, book_title, page_number, chunk_index, content,
                        (embedding <=> %(q_vec)s::vector) AS distance
                 FROM document_chunks
-                {where_clause}
-                {dist_filter}
+                {where_sql}
                 ORDER BY embedding <=> %(q_vec)s::vector
                 LIMIT %(top_k)s;
             """
@@ -248,20 +271,24 @@ def search_chunks_hybrid(
     try:
         with conn.cursor() as cur:
             clean_fts = _build_fts_query(fts_query)
-            where_clause, params = _build_where_clause(book_filter)
-            params.update({
+            params = {
                 "q_vec": query_vector,
                 "fts_q": clean_fts,
                 "cand_limit": min(max(top_k * candidate_multiplier, 50), MAX_CANDIDATES),
                 "top_k": top_k,
                 "rrf_k": RRF_CONSTANT,
-            })
+            }
 
+            # Candidate filter: chunks matching vector distance threshold OR full-text query
+            candidate_conds = [
+                "((embedding <=> %(q_vec)s::vector) < 0.85 OR to_tsvector('english', content) @@ websearch_to_tsquery('english', %(fts_q)s))"
+            ]
             if max_distance is not None:
                 params["max_dist"] = max_distance
-                dist_filter = "AND (embedding <=> %(q_vec)s::vector) <= %(max_dist)s"
-            else:
-                dist_filter = ""
+                candidate_conds.append("(embedding <=> %(q_vec)s::vector) <= %(max_dist)s")
+
+            where_sql, filter_params = _build_filter_conditions(book_filter, candidate_conds)
+            params.update(filter_params)
 
             query = f"""
                 WITH candidates AS (
@@ -271,10 +298,7 @@ def search_chunks_hybrid(
                            ROW_NUMBER() OVER (ORDER BY (embedding <=> %(q_vec)s::vector) ASC) AS vec_rank,
                            ROW_NUMBER() OVER (ORDER BY ts_rank_cd(to_tsvector('english', content), websearch_to_tsquery('english', %(fts_q)s)) DESC) AS fts_rank
                     FROM document_chunks
-                    {where_clause}
-                    WHERE (embedding <=> %(q_vec)s::vector) < 0.82
-                       OR to_tsvector('english', content) @@ websearch_to_tsquery('english', %(fts_q)s)
-                    {dist_filter}
+                    {where_sql}
                     LIMIT %(cand_limit)s
                 )
                 SELECT id, filename, book_title, page_number, chunk_index, content, dist,
@@ -351,8 +375,17 @@ def search_chunks_stratified(
             cur.execute(query, params)
             rows = cur.fetchall()
 
-            # Fallback without strict distance threshold to ensure every book has passages
-            if not rows or len(rows) < per_book_k:
+            # Fallback: check if we have good book coverage (unique books represented)
+            unique_books_in_result = len(set(r[2] for r in rows)) if rows else 0
+            # Get total unique books in DB for comparison
+            cur.execute("SELECT COUNT(DISTINCT book_title) FROM document_chunks;")
+            total_unique_books = cur.fetchone()[0]
+
+            # Trigger fallback if: no results OR few unique books represented (< 50% of total)
+            should_fallback = (not rows or
+                               unique_books_in_result < max(3, total_unique_books // 2))
+
+            if should_fallback:
                 fallback_params = {"q_vec": query_vector, "per_book_k": per_book_k}
                 cur.execute("""
                     WITH ranked_chunks AS (
@@ -382,10 +415,11 @@ def search_chunks_by_entity(
     per_book_k: int = 4,
     max_distance: float = 0.78,
     top_k: int = 20,
+    book_filter: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Entity-focused search prioritizing books and passages where the entity actually appears,
-    avoiding contamination from unrelated books.
+    avoiding contamination from unrelated books. Supports optional book filtering.
     """
     conn = get_connection()
     try:
@@ -394,7 +428,21 @@ def search_chunks_by_entity(
             entity_like = f"%{clean_entity}%" if clean_entity else "%"
             clean_fts = _build_fts_query(entity_name)
 
-            query = """
+            params = {
+                "entity_like": entity_like,
+                "fts_q": clean_fts,
+                "q_vec": query_vector,
+                "max_dist": max_distance,
+                "per_book_k": per_book_k,
+                "top_k": top_k,
+            }
+
+            book_filter_sql = ""
+            if book_filter and book_filter != "All Books":
+                params["b_filter"] = f"%{book_filter}%"
+                book_filter_sql = "AND (book_title ILIKE %(b_filter)s OR filename ILIKE %(b_filter)s)"
+
+            query = f"""
                 WITH entity_matches AS (
                     SELECT id, filename, book_title, page_number, chunk_index, content,
                            (embedding <=> %(q_vec)s::vector) AS dist,
@@ -406,29 +454,23 @@ def search_chunks_by_entity(
                                    (embedding <=> %(q_vec)s::vector) ASC
                            ) AS rank_in_book
                     FROM document_chunks
-                    WHERE content ILIKE %(entity_like)s
+                    WHERE (content ILIKE %(entity_like)s
                        OR to_tsvector('english', content) @@ websearch_to_tsquery('english', %(fts_q)s)
-                       OR (embedding <=> %(q_vec)s::vector) <= %(max_dist)s
+                       OR (embedding <=> %(q_vec)s::vector) <= %(max_dist)s)
+                       {book_filter_sql}
                 )
                 SELECT id, filename, book_title, page_number, chunk_index, content, dist
                 FROM entity_matches
                 WHERE rank_in_book <= %(per_book_k)s
-                ORDER BY has_exact_entity DESC, dist ASC
+                ORDER BY rank_in_book ASC, has_exact_entity DESC, dist ASC
                 LIMIT %(top_k)s;
             """
-            cur.execute(query, {
-                "entity_like": entity_like,
-                "fts_q": clean_fts,
-                "q_vec": query_vector,
-                "max_dist": max_distance,
-                "per_book_k": per_book_k,
-                "top_k": top_k,
-            })
+            cur.execute(query, params)
             rows = cur.fetchall()
 
             # Fallback if no exact entity matches or sparse
             if not rows:
-                return search_chunks_hybrid(query_vector, entity_name, top_k=top_k)
+                return search_chunks_hybrid(query_vector, entity_name, top_k=top_k, book_filter=book_filter)
 
             return [_row_to_dict(r) for r in rows]
     finally:

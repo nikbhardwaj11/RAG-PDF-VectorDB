@@ -25,11 +25,13 @@ This is a **generic Retrieval-Augmented Generation (RAG)** system designed to in
 | Feature | Description |
 |---------|-------------|
 | **Multi-Book Support** | Index unlimited PDFs, each can be a compilation (multiple books in one PDF) or single book |
-| **Dynamic K Retrieval** | Automatically adjusts chunk count based on query type (3-50 chunks) |
-| **Cross-Book Awareness** | Balanced retrieval across all books using PostgreSQL window functions |
+| **Async Background Ingestion** | Drag & drop PDF upload runs extraction, embedding, and vector DB insertion in the background without blocking the UI |
+| **Document Safety Threshold** | Maximum page validation guard (<= 4,000 pages per PDF) with automatic rejection of oversized files |
+| **Live Progress Loader UI** | Shimmer loader card with pulsing status indicator, real-time stage progress, and task management |
+| **Dynamic K Retrieval** | Automatically adjusts chunk count based on query type (3-60 chunks) |
+| **Cross-Book Awareness** | Balanced retrieval across all books using PostgreSQL window functions and canonical entity mapping |
 | **4 Query Strategies** | Stratified Listing, Entity Comparison, Entity Timeline, Hybrid Precision |
-| **Entity-Aware** | Detects characters/places/concepts from questions without hardcoded lists |
-| **Streamlit UI** | Chat interface with book management, visual metadata, cross-book views |
+| **Streamlit UI** | Chat interface with book management, visual metadata, and non-blocking background workers |
 
 ---
 
@@ -127,14 +129,31 @@ This is a **generic Retrieval-Augmented Generation (RAG)** system designed to in
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                        INGESTION PIPELINE (ingest.py)                           │
+│              ASYNC BACKGROUND INGESTION PIPELINE (ingest.py)                    │
 └─────────────────────────────────────────────────────────────────────────────────┘
 
-    SCAN BOOKS/ FOLDER
+    UPLOAD PDF OR TRIGGER SYNC
          │
          ▼
     ┌──────────────────────────────────────────┐
-    │ FOR EACH PDF FILE                        │
+    │ 1. VALIDATION GUARD                      │
+    │    ├── Check page count via PdfReader    │
+    │    ├── If > 4,000 pages → REJECT FILE    │
+    │    │   (Clean up disk & alert user)      │
+    │    └── If <= 4,000 pages → ACCEPT        │
+    └─────────────────────┬────────────────────┘
+                          │
+                          ▼
+    ┌──────────────────────────────────────────┐
+    │ 2. INGESTION TASK MANAGER (BACKGROUND)   │
+    │    ├── Thread-safe Queue + Worker Daemon │
+    │    ├── Non-blocking: Chat UI stays open  │
+    │    └── Emits live stage & progress (0-1) │
+    └─────────────────────┬────────────────────┘
+                          │
+                          ▼
+    ┌──────────────────────────────────────────┐
+    │ FOR EACH PDF FILE / CHAPTER              │
     │                                          │
     │ 1. READ PDF OUTLINE (BOOKMARKS/TOC)      │
     │    ├── If outline exists → COMPILATION   │
@@ -507,6 +526,9 @@ LIMIT top_k;
 ```
 
 **Gap Pruning**: Stops when distance jumps > 0.15 or distance > 0.62.
+
+### 5. Multi-Book Round-Robin Interleaving
+For cross-book synthesis (`LISTING`, `COMPARISON`, `TIMELINE`), the reranker groups candidate passages by book and performs a round-robin interleave selection. This prevents higher-density or slightly lower-distance books from monopolizing the context window, guaranteeing balanced representation across all books in the series or library.
 
 ---
 
