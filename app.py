@@ -53,10 +53,32 @@ st.set_page_config(
 # ===================== Enhanced CSS =====================
 st.markdown("""
 <style>
-/* ===== LAYOUT ===== */
-.block-container { max-width: 1200px; padding-top: 1.5rem !important; }
+/* ===== LAYOUT & CORE THEME ===== */
+.block-container { max-width: 1200px; padding-top: 1.2rem !important; padding-bottom: 3rem !important; }
+body, p, h1, h2, h3, h4, h5, h6, input, textarea {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
 
-/* ===== SIDEBAR: ALWAYS OPEN ON DESKTOP ===== */
+/* ===== PROTECT STREAMLIT ICON FONTS (CRITICAL FOR LIGATURES) ===== */
+[data-testid*="Icon"],
+[data-testid*="stIcon"],
+.material-symbols-rounded,
+.material-symbols-outlined,
+[class*="material-symbols"],
+[class*="stIcon"] {
+    font-family: "Material Symbols Rounded", "Material Symbols Outlined" !important;
+    font-style: normal !important;
+    font-weight: normal !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    word-wrap: normal !important;
+    white-space: nowrap !important;
+    direction: ltr !important;
+    -webkit-font-feature-settings: 'liga' !important;
+    -webkit-font-smoothing: antialiased !important;
+}
+
+/* ===== SIDEBAR ===== */
 @media (min-width: 768px) {
     [data-testid="stSidebarCollapseButton"],
     [data-testid="stSidebarCollapsedControl"],
@@ -72,146 +94,256 @@ st.markdown("""
         visibility: visible !important;
     }
 }
-section[data-testid="stSidebar"] { border-right: 1px solid #2d2d2d; }
+section[data-testid="stSidebar"] {
+    background-color: #0d1117;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
 section[data-testid="stSidebar"] h2 {
-    color: #d3a625; font-size: 1.2rem; font-weight: 700;
-    border-bottom: 1px solid #2d2d2d; padding-bottom: .5rem;
+    color: #f59e0b; font-size: 1.15rem; font-weight: 700;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: .5rem;
+    display: flex; align-items: center; gap: 8px;
 }
-section[data-testid="stSidebar"] h3 { font-size: .95rem; margin-top: 1rem; }
-section[data-testid="stSidebar"] .stButton > button { justify-content: flex-start; }
+section[data-testid="stSidebar"] h3 { font-size: .92rem; margin-top: .8rem; font-weight: 600; color: #e2e8f0; }
 
-/* ===== CLEAN HEADER ===== */
-#MainMenu, footer, [data-testid="stDeployButton"], .stDeployButton { display: none !important; }
-header[data-testid="stHeader"] { background: transparent; }
-
-/* ===== WIDGETS ===== */
-[data-testid="stMetric"] {
-    background: linear-gradient(145deg, #1a1a2e, #16213e);
-    border: 1px solid #2d2d2d; border-radius: 10px; padding: 10px 12px;
+/* ===== STATS CARD ===== */
+.sidebar-stats-card {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
-[data-testid="stMetricLabel"] { font-size: .65rem; text-transform: uppercase; letter-spacing: .8px; color: #888; }
-[data-testid="stMetricValue"] { font-size: 1.4rem; font-weight: 700; color: #f5c542; }
-.stButton > button { border-radius: 8px; font-weight: 500; transition: all .2s; }
-.stButton > button:hover { border-color: #6366f1; }
-[data-testid="stExpander"] { border: 1px solid #2d2d2d; border-radius: 10px; }
-[data-testid="stChatMessage"] { border-radius: 12px; }
+.stats-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.8px; color: #94a3b8;
+}
+.stats-pulse-dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background-color: #10b981; box-shadow: 0 0 8px #10b981; margin-right: 6px;
+}
+.stats-tag {
+    background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.4);
+    color: #c7d2fe; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem;
+}
+.stats-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center;
+}
+.stats-item {
+    background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px; padding: 6px 4px;
+}
+.stats-num { font-size: 1.15rem; font-weight: 800; color: #f59e0b; line-height: 1.2; }
+.stats-lbl { font-size: 0.68rem; color: #94a3b8; text-transform: uppercase; margin-top: 2px; }
 
-/* ===== TITLE ===== */
+/* ===== BUTTONS & EXPANDERS ===== */
+.stButton > button {
+    border-radius: 8px; font-weight: 500; font-size: 0.85rem;
+    transition: all .2s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.stButton > button:hover {
+    border-color: #6366f1; transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+}
+[data-testid="stExpander"] {
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 10px !important;
+    background: rgba(17, 24, 39, 0.4) !important;
+    margin: 8px 0 !important;
+}
+
+/* ===== APP HEADER ===== */
+.app-header-container { text-align: center; margin-bottom: 1.6rem; }
+.app-badge-header {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.35);
+    color: #c7d2fe; font-size: 0.75rem; font-weight: 600; padding: 4px 14px;
+    border-radius: 20px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;
+}
 .app-title {
-    font-family: Georgia, serif; font-size: 2.5rem; font-weight: 700; text-align: center;
-    background: linear-gradient(90deg, #d3a625, #f5c542, #d3a625);
+    font-size: 2.4rem; font-weight: 800; text-align: center; margin: 0;
+    color: #f8fafc;
+    background: linear-gradient(135deg, #ffffff 0%, #fde047 50%, #f59e0b 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    letter-spacing: -0.5px;
 }
-.app-subtitle { font-size: 1.05rem; color: #a0a0a0; margin-bottom: 1.5rem; text-align: center; }
+.app-subtitle {
+    font-size: 0.96rem; color: #94a3b8; text-align: center; max-width: 720px; margin: 0.6rem auto 1.2rem auto;
+    line-height: 1.55;
+}
 
-/* ===== RETRIEVAL BADGE ===== */
-.retrieval-pill {
-    padding: 12px 16px; border-radius: 12px; font-size: .85rem; line-height: 1.7;
-    background: rgba(99, 102, 241, .1); border: 1px solid rgba(99, 102, 241, .3);
-    color: #e0e7ff; margin-bottom: 1rem;
+/* ===== SUGGESTION BUTTONS & HEADER ===== */
+.suggestions-header {
+    display: flex; align-items: center; gap: 8px; margin: 1rem 0 0.6rem 0;
 }
-.confidence-high { color: #22c55e; font-weight: 600; }
-.confidence-med  { color: #f59e0b; font-weight: 600; }
-.confidence-low  { color: #ef4444; font-weight: 600; }
+.suggestions-icon { font-size: 1.1rem; }
+.suggestions-title { font-size: 0.92rem; font-weight: 700; color: #e2e8f0; letter-spacing: 0.3px; }
+.suggestions-subtitle { font-size: 0.78rem; color: #64748b; margin-left: 4px; }
+
+div[data-testid="column"] .stButton > button {
+    background: linear-gradient(145deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%) !important;
+    border: 1px solid rgba(99, 102, 241, 0.25) !important;
+    color: #f1f5f9 !important;
+    border-radius: 10px !important;
+    padding: 0.65rem 0.8rem !important;
+    font-size: 0.86rem !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
+    transition: all 0.25s ease !important;
+    height: 100% !important;
+}
+div[data-testid="column"] .stButton > button:hover {
+    border-color: #f59e0b !important;
+    color: #fbbf24 !important;
+    background: linear-gradient(145deg, rgba(30, 41, 59, 0.95) 0%, rgba(20, 28, 48, 0.95) 100%) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 18px rgba(245, 158, 11, 0.25) !important;
+}
+
+/* ===== VISUAL CONFIDENCE METER ===== */
+.confidence-meter-container {
+    background: linear-gradient(135deg, rgba(20, 27, 45, 0.75) 0%, rgba(15, 23, 42, 0.9) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin: 12px 0 16px 0;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.confidence-meter-top {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+    font-size: 0.84rem;
+}
+.confidence-meter-title { color: #f1f5f9; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.confidence-meter-pct {
+    font-size: 0.76rem; font-weight: 700; padding: 3px 10px; border-radius: 20px;
+    letter-spacing: 0.3px;
+}
+.confidence-meter-track {
+    width: 100%; height: 7px; background: rgba(255, 255, 255, 0.08);
+    border-radius: 6px; overflow: hidden; margin-bottom: 8px;
+}
+.confidence-meter-fill {
+    height: 100%; border-radius: 6px; transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.confidence-meter-bottom {
+    display: flex; justify-content: space-between; font-size: 0.74rem; color: #94a3b8;
+}
+
+/* ===== RETRIEVAL DETAILS GRID ===== */
+.retrieval-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 8px 0;
+}
+@media (max-width: 768px) {
+    .retrieval-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.retrieval-cell {
+    background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px; padding: 8px 10px;
+}
+.rc-label { font-size: 0.64rem; font-weight: 700; color: #64748b; letter-spacing: 0.5px; }
+.rc-val { font-size: 0.8rem; font-weight: 600; margin-top: 2px; }
+.entity-chips-container {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 5px;
+    margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.entity-chips-label { font-size: 0.72rem; color: #94a3b8; font-weight: 600; }
 .entity-badge {
-    display: inline-block; background: rgba(34, 197, 94, .15); border: 1px solid rgba(34, 197, 94, .3);
-    color: #86efac; padding: 3px 10px; border-radius: 12px; margin: 2px; font-size: .78rem;
-}
-.cross-book-badge {
-    background: rgba(251, 191, 36, .15); border: 1px solid rgba(251, 191, 36, .4);
-    color: #fde047; padding: 3px 10px; border-radius: 12px; font-size: .72rem;
+    display: inline-block; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.35);
+    color: #c7d2fe; padding: 2px 8px; border-radius: 12px; font-size: 0.73rem; font-weight: 500;
 }
 
-/* ===== CARDS ===== */
-.book-card, .pdf-file-card {
-    border: 1px solid #2d2d2d; border-radius: 10px; padding: 12px; margin: 6px 0;
-    background: linear-gradient(145deg, #1a1a2e, #16213e); transition: all .2s;
+/* ===== QUERY TYPE BADGES ===== */
+.query-type-badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px;
+    font-size: 0.75rem; font-weight: 600; margin-bottom: 10px; letter-spacing: 0.3px;
 }
-.book-card:hover, .pdf-file-card:hover { border-color: #d3a625; }
-.book-card h4 { margin: 0 0 6px 0; color: #d3a625; font-size: 1rem; }
-.book-card .meta { color: #888; font-size: .82rem; }
-.pdf-file-card .title { font-weight: 600; color: #d3a625; font-size: .9rem; margin-bottom: 4px; }
+.query-type-listing { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.35); }
+.query-type-comparison { background: rgba(245, 158, 11, 0.15); color: #fde68a; border: 1px solid rgba(245, 158, 11, 0.35); }
+.query-type-timeline { background: rgba(99, 102, 241, 0.15); color: #c7d2fe; border: 1px solid rgba(99, 102, 241, 0.35); }
+.query-type-thematic { background: rgba(168, 85, 247, 0.15); color: #f0abfc; border: 1px solid rgba(168, 85, 247, 0.35); }
+.query-type-factual { background: rgba(14, 165, 233, 0.15); color: #7dd3fc; border: 1px solid rgba(14, 165, 233, 0.35); }
+
+/* ===== SOURCE CARDS ===== */
+.source-card {
+    background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px; padding: 12px 16px; margin: 10px 0; transition: all .2s;
+}
+.source-card:hover { border-color: rgba(99, 102, 241, 0.5); transform: translateY(-1px); }
+.source-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.source-book { font-weight: 600; font-size: 0.84rem; color: #e2e8f0; }
+.source-distance { font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: 600; }
+.distance-good { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.4); }
+.distance-med { background: rgba(245, 158, 11, 0.2); color: #fde68a; border: 1px solid rgba(245, 158, 11, 0.4); }
+.distance-bad { background: rgba(99, 102, 241, 0.2); color: #c7d2fe; border: 1px solid rgba(99, 102, 241, 0.4); }
+.source-text { color: #cbd5e1; font-size: 0.85rem; line-height: 1.65; margin-top: 6px; }
+
+/* ===== BOOK DISTRIBUTION ROW ===== */
+.dist-row { margin-bottom: 8px; }
+.dist-meta { display: flex; justify-content: space-between; font-size: 0.76rem; margin-bottom: 3px; }
+.dist-book-name { color: #e2e8f0; font-weight: 500; }
+.dist-book-stats { color: #94a3b8; }
+.dist-track { height: 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.dist-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #6366f1, #38bdf8); }
+
+/* ===== CARDS & FILE LIST ===== */
+.pdf-file-card {
+    border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 12px; margin: 6px 0;
+    background: linear-gradient(145deg, #131b2e, #0f172a); transition: all .2s;
+}
+.pdf-file-card:hover { border-color: #f59e0b; }
+.pdf-file-card .title { font-weight: 600; color: #f59e0b; font-size: .88rem; margin-bottom: 4px; }
 .pdf-file-card .stats { color: #888; font-size: .78rem; }
 .pdf-file-card .chapters { color: #a5b4fc; font-size: .78rem; margin-top: 4px; }
-.status-indexed { color: #22c55e; font-weight: 500; }
+.status-indexed { color: #10b981; font-weight: 500; }
 .status-pending { color: #f59e0b; font-weight: 500; }
 
-/* ===== DISTRIBUTION BARS ===== */
-.dist-label { font-size: .75rem; color: #a0a0a0; display: flex; justify-content: space-between; margin-bottom: 2px; }
-.dist-label .book-name { color: #e0e7ff; font-weight: 500; }
-.dist-label .book-count { color: #f5c542; font-weight: 600; }
-.dist-bar { height: 10px; border-radius: 6px; margin-bottom: 10px; background: linear-gradient(90deg, #6366f1, #22c55e, #f59e0b); }
-
-/* ===== BACKGROUND INGESTION LOADER & STATUS CARDS ===== */
+/* ===== BACKGROUND INGESTION LOADER ===== */
 .upload-limit-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: rgba(99, 102, 241, 0.15);
-    border: 1px solid rgba(99, 102, 241, 0.35);
-    color: #c7d2fe;
-    font-size: 0.74rem;
-    font-weight: 500;
-    padding: 3px 8px;
-    border-radius: 6px;
-    margin-right: 6px;
-    margin-bottom: 8px;
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.35);
+    color: #c7d2fe; font-size: 0.74rem; font-weight: 500; padding: 3px 8px;
+    border-radius: 6px; margin-right: 6px; margin-bottom: 8px;
 }
 .loader-card {
-    background: linear-gradient(135deg, rgba(30, 27, 75, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
-    border: 1px solid rgba(99, 102, 241, 0.45);
-    border-radius: 10px;
-    padding: 12px 14px;
-    margin: 8px 0;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    position: relative;
-    overflow: hidden;
+    background: linear-gradient(135deg, rgba(30, 27, 75, 0.7) 0%, rgba(15, 23, 42, 0.95) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.45); border-radius: 12px; padding: 14px 16px;
+    margin: 10px 0; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3); position: relative; overflow: hidden;
 }
 .loader-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: -100%;
-    width: 200%; height: 2px;
+    content: ''; position: absolute; top: 0; left: -100%; width: 200%; height: 2px;
     background: linear-gradient(90deg, transparent, #6366f1, #a855f7, transparent);
     animation: shimmer 2s infinite linear;
 }
-@keyframes shimmer {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(50%); }
-}
-.loader-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 6px;
-}
-.loader-title {
-    font-weight: 600;
-    font-size: 0.86rem;
-    color: #f5c542;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
+@keyframes shimmer { 0% { transform: translateX(0); } 100% { transform: translateX(50%); } }
+.loader-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.loader-title { font-weight: 600; font-size: 0.86rem; color: #f5c542; display: flex; align-items: center; gap: 8px; }
 .loader-pulse {
-    display: inline-block;
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background-color: #38bdf8;
-    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7);
-    animation: pulse-ring 1.4s infinite;
+    display: inline-block; width: 9px; height: 9px; border-radius: 50%; background-color: #38bdf8;
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); animation: pulse-ring 1.4s infinite;
 }
 @keyframes pulse-ring {
     0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); }
     70% { transform: scale(1); box-shadow: 0 0 0 7px rgba(56, 189, 248, 0); }
     100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
 }
-.loader-step {
-    font-size: 0.77rem;
-    color: #cbd5e1;
-    margin-top: 4px;
-    line-height: 1.4;
+.loader-step { font-size: 0.78rem; color: #cbd5e1; margin-top: 4px; line-height: 1.4; }
+.loader-progress-track {
+    width: 100%; height: 7px; background: rgba(255, 255, 255, 0.08);
+    border-radius: 6px; overflow: hidden; margin: 9px 0 7px 0;
+}
+.loader-progress-fill {
+    height: 100%; border-radius: 6px;
+    background: linear-gradient(90deg, #38bdf8, #6366f1, #a855f7);
+    background-size: 200% 100%;
+    animation: gradient-move 2.5s ease infinite;
+    transition: width 0.4s ease;
+}
+@keyframes gradient-move {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
 }
 .loader-completed {
     border-color: rgba(34, 197, 94, 0.4);
@@ -224,78 +356,34 @@ header[data-testid="stHeader"] { background: transparent; }
 }
 .loader-rejected::before { display: none; }
 .loader-timer-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.77rem;
-    color: #94a3b8;
-    margin-top: 6px;
-    margin-bottom: 6px;
-    padding-top: 5px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex; justify-content: space-between; align-items: center; font-size: 0.77rem; color: #94a3b8;
+    margin-top: 6px; margin-bottom: 2px; padding-top: 5px; border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
-.loader-timer-row b {
-    color: #f5c542;
-    font-weight: 600;
-}
+.loader-timer-row b { color: #f5c542; font-weight: 600; }
 .loader-pct-badge {
-    background: rgba(99, 102, 241, 0.25);
-    border: 1px solid rgba(99, 102, 241, 0.5);
-    color: #e0e7ff;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.78rem;
-    font-weight: 700;
+    background: rgba(99, 102, 241, 0.25); border: 1px solid rgba(99, 102, 241, 0.5);
+    color: #e0e7ff; padding: 2px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;
 }
 .loader-stage-pill {
-    background: rgba(56, 189, 248, 0.15);
-    border: 1px solid rgba(56, 189, 248, 0.4);
-    color: #38bdf8;
-    padding: 2px 7px;
-    border-radius: 6px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    margin-right: 6px;
+    background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4);
+    color: #38bdf8; padding: 2px 7px; border-radius: 6px; font-size: 0.72rem; font-weight: 600; margin-right: 6px;
 }
-
-/* ===== QUERY TYPE INDICATOR ===== */
-.query-type-badge {
-    display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: .75rem;
-    font-weight: 600; margin-right: 8px; margin-bottom: 4px;
-}
-.query-type-listing { background: rgba(34, 197, 94, .2); color: #86efac; border: 1px solid rgba(34, 197, 94, .4); }
-.query-type-comparison { background: rgba(251, 191, 36, .2); color: #fde047; border: 1px solid rgba(251, 191, 36, .4); }
-.query-type-timeline { background: rgba(99, 102, 241, .2); color: #c7d2fe; border: 1px solid rgba(99, 102, 241, .4); }
-.query-type-thematic { background: rgba(168, 85, 247, .2); color: #f0abfc; border: 1px solid rgba(168, 85, 247, .4); }
-.query-type-factual { background: rgba(59, 130, 246, .2); color: #bfdbfe; border: 1px solid rgba(59, 130, 246, .4); }
-
-/* ===== ANSWER QUALITY INDICATOR (CONFIDENCE METER) ===== */
-.quality-indicator {
-    display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px;
-    border-radius: 8px; font-size: .8rem; font-weight: 500; margin-bottom: 12px;
-}
-.quality-high { background: rgba(34, 197, 94, .15); color: #86efac; border: 1px solid rgba(34, 197, 94, .3); }
-.quality-medium { background: rgba(251, 191, 36, .15); color: #fde047; border: 1px solid rgba(251, 191, 36, .3); }
-.quality-low { background: rgba(239, 68, 68, .15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, .3); }
-
-/* ===== SOURCE CARD ===== */
-.source-card {
-    border: 1px solid #2d2d2d; border-radius: 8px; padding: 12px; margin: 8px 0;
-    background: #16213e; transition: all .2s;
-}
-.source-card:hover { border-color: #d3a625; }
-.source-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.source-book { color: #d3a625; font-weight: 600; font-size: .9rem; }
-.source-page { color: #888; font-size: .75rem; }
-.source-distance { font-size: .7rem; padding: 2px 8px; border-radius: 10px; }
-.distance-good { background: rgba(34, 197, 94, .2); color: #86efac; }
-.distance-med { background: rgba(251, 191, 36, .2); color: #fde047; }
-.distance-bad { background: rgba(239, 68, 68, .2); color: #fca5a5; }
-.source-text { color: #e0e0e0; font-size: .88rem; line-height: 1.6; }
 
 /* ===== LOADING SPINNER & CHAT INPUT ===== */
 .stSpinner > div { border-color: #6366f1 !important; }
-.stChatInputContainer { border-top: 1px solid #2d2d2d; padding-top: 1rem; }
+.stChatInputContainer { border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 0.8rem; }
+.stChatInputContainer textarea {
+    border-radius: 12px !important;
+    border: 1px solid rgba(99, 102, 241, 0.3) !important;
+    background: rgba(15, 23, 42, 0.8) !important;
+    color: #f8fafc !important;
+}
+.stChatInputContainer textarea:focus {
+    border-color: #f59e0b !important;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.25) !important;
+}
+#MainMenu, footer, [data-testid="stDeployButton"], .stDeployButton { display: none !important; }
+header[data-testid="stHeader"] { background: transparent; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -490,14 +578,18 @@ def render_book_distribution(book_dist: Dict[str, int], max_items: int = 10):
 
     for book_title, count in sorted_items:
         pct = (count / total) * 100
-        bar_width = min(pct * 2.5, 100)
-        short_title = book_title[:45] + "..." if len(book_title) > 45 else book_title
+        bar_width = min(pct, 100)
+        short_title = book_title[:50] + "..." if len(book_title) > 50 else book_title
         st.markdown(f"""
-        <div class="dist-label">
-            <span class="book-name">{short_title}</span>
-            <span class="book-count">{count} chunks ({pct:.0f}%)</span>
+        <div class="dist-row">
+            <div class="dist-meta">
+                <span class="dist-book-name">📖 {short_title}</span>
+                <span class="dist-book-stats"><b>{count}</b> chunks ({pct:.0f}%)</span>
+            </div>
+            <div class="dist-track">
+                <div class="dist-fill" style="width: {bar_width}%;"></div>
+            </div>
         </div>
-        <div class="dist-bar" style="width: {bar_width}%;"></div>
         """, unsafe_allow_html=True)
 
 
@@ -513,99 +605,172 @@ def render_cross_book_view(chunks: List[Dict[str, Any]], query_type: str):
     if len(by_book) < 2:
         return
 
-    st.markdown("### 📊 Cross-Book View")
-    tab_titles = [f"📘 {title[:22]}..." if len(title) > 22 else f"📘 {title}" for title in by_book.keys()]
+    st.markdown(f"#### 📊 Cross-Book Excerpts ({len(by_book)} Books Represented)")
+    tab_titles = [f"📖 {title[:20]}... ({len(b_chunks)})" if len(title) > 20 else f"📖 {title} ({len(b_chunks)})" for title, b_chunks in by_book.items()]
     tabs = st.tabs(tab_titles)
 
     for tab, (book_title, book_chunks) in zip(tabs, by_book.items()):
         with tab:
-            st.markdown(f"**{book_title}** — {len(book_chunks)} passages")
+            st.markdown(f"**{book_title}** — *{len(book_chunks)} passages retrieved*")
             for c in book_chunks:
                 distance = c.get('distance', 0)
-                dist_color = "#22c55e" if distance < 0.4 else "#f59e0b" if distance < 0.55 else "#ef4444"
+                if distance < 0.38:
+                    dist_badge = f'<span class="source-distance distance-good">🟢 High Relevance (Dist: {distance:.3f})</span>'
+                    border_accent = "#10b981"
+                elif distance < 0.55:
+                    dist_badge = f'<span class="source-distance distance-med">🟡 Moderate (Dist: {distance:.3f})</span>'
+                    border_accent = "#f59e0b"
+                else:
+                    dist_badge = f'<span class="source-distance distance-bad">🔵 Contextual (Dist: {distance:.3f})</span>'
+                    border_accent = "#6366f1"
+
                 page_num = c.get("page") or c.get("page_number", "?")
                 text_snippet = c.get("text") or c.get("content", "")
                 st.markdown(
-                    f"**Page {page_num}** &nbsp; "
-                    f"<span style='color:{dist_color};'>● Distance: {distance:.3f}</span>",
+                    f"""<div class="source-card" style="border-left: 3px solid {border_accent};">
+                    <div class="source-header">
+                        <span class="source-book">📄 Page {page_num}</span>
+                        {dist_badge}
+                    </div>
+                    <div class="source-text">{text_snippet[:420]}{"..." if len(text_snippet) > 420 else ""}</div>
+                    </div>""",
                     unsafe_allow_html=True,
                 )
-                st.write(text_snippet[:400] + ("..." if len(text_snippet) > 400 else ""))
-                st.divider()
 
 
 def render_quality_indicator(meta: Dict[str, Any]):
-    """Render answer quality indicator (confidence meter) with friendly user-facing labels."""
+    """Render answer quality indicator with a visual confidence meter."""
     confidence = meta.get("confidence", 0)
     unique_books = meta.get("unique_books_retrieved", 0)
     book_count = meta.get("book_count", 1)
     coverage = meta.get("coverage_pct", 0)
+    pct_val = max(5, min(100, int(confidence * 100)))
 
     if confidence > 0.65 and coverage > 40:
-        quality_class = "quality-high"
+        bar_color = "linear-gradient(90deg, #10b981, #34d399)"
+        badge_style = "background:rgba(16, 185, 129, 0.2); color:#6ee7b7; border:1px solid rgba(16, 185, 129, 0.4);"
         quality_label = "Strong Match"
-        quality_icon = "✅"
-        note = f"Found relevant passages across {unique_books} of {book_count} books"
+        quality_icon = "🟢"
+        note = f"High relevance across {unique_books} of {book_count} books"
     elif confidence > 0.35:
-        quality_class = "quality-medium"
+        bar_color = "linear-gradient(90deg, #f59e0b, #fbbf24)"
+        badge_style = "background:rgba(245, 158, 11, 0.2); color:#fde68a; border:1px solid rgba(245, 158, 11, 0.4);"
         quality_label = "Moderate Match"
-        quality_icon = "⚠️"
-        note = f"Found relevant passages in {unique_books} of {book_count} books"
+        quality_icon = "🟡"
+        note = f"Relevant context found in {unique_books} of {book_count} books"
     else:
-        quality_class = "quality-low"
+        bar_color = "linear-gradient(90deg, #6366f1, #818cf8)"
+        badge_style = "background:rgba(99, 102, 241, 0.2); color:#c7d2fe; border:1px solid rgba(99, 102, 241, 0.4);"
         quality_label = "Partial Match"
-        quality_icon = "🔍"
+        quality_icon = "🔵"
         note = f"Limited matches found ({unique_books} book(s) represented)"
 
     st.markdown(f"""
-    <div class="quality-indicator {quality_class}">
-        {quality_icon} <b>{quality_label}</b> &nbsp;•&nbsp; {note} &nbsp;•&nbsp; Match Score: {confidence:.0%}
+    <div class="confidence-meter-container">
+        <div class="confidence-meter-top">
+            <span class="confidence-meter-title">
+                {quality_icon} <b>{quality_label}</b> &nbsp;<span style="color:#94a3b8; font-weight:normal;">({note})</span>
+            </span>
+            <span class="confidence-meter-pct" style="{badge_style}">
+                {confidence:.0%} Match
+            </span>
+        </div>
+        <div class="confidence-meter-track">
+            <div class="confidence-meter-fill" style="width: {pct_val}%; background: {bar_color};"></div>
+        </div>
+        <div class="confidence-meter-bottom">
+            <span>📚 <b>Library Coverage:</b> {coverage:.0f}% ({unique_books}/{book_count} books consulted)</span>
+            <span>🎯 <b>Relevance Score:</b> {confidence:.2f} / 1.00</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
 
 def render_retrieval_metadata(meta: Dict[str, Any]):
-    """Render structured retrieval details pill with human-readable labels and entity badges."""
+    """Render structured retrieval details pill with modern metrics and entity chips."""
     raw_strategy = meta.get("strategy", "unknown")
     strategy_label = STRATEGY_HUMAN_LABELS.get(raw_strategy, raw_strategy.replace("_", " ").title())
     dynamic_k = meta.get("dynamic_k", 0)
     target_k = meta.get("target_k", 0)
     entities = meta.get("entities", [])
     confidence = meta.get("confidence", 0)
-    book_dist = meta.get("book_distribution", {})
     unique_books = meta.get("unique_books_retrieved", 0)
     retrieval_time = meta.get("retrieval_time_ms", 0)
 
-    if confidence > 0.65:
-        conf_class = "confidence-high"
-        conf_label = "High"
-    elif confidence > 0.35:
-        conf_class = "confidence-med"
-        conf_label = "Medium"
-    else:
-        conf_class = "confidence-low"
-        conf_label = "Low"
-
-    badge_html = '<div class="retrieval-pill">'
-    badge_html += f'🔍 <b>Strategy:</b> {strategy_label} &nbsp;|&nbsp; '
-    badge_html += f'🎯 <b>Passages Retrieved:</b> {dynamic_k}/{target_k} chunks &nbsp;|&nbsp; '
-    badge_html += f'📈 <b>Match Score:</b> <span class="{conf_class}">{conf_label} ({confidence:.0%})</span> &nbsp;|&nbsp; '
-    badge_html += f'⏱️ <b>Search Time:</b> {retrieval_time}ms'
+    st.markdown(f"""
+    <div class="retrieval-grid">
+        <div class="retrieval-cell">
+            <div class="rc-label">STRATEGY</div>
+            <div class="rc-val" style="color:#a5b4fc;">⚡ {strategy_label}</div>
+        </div>
+        <div class="retrieval-cell">
+            <div class="rc-label">PASSAGES</div>
+            <div class="rc-val" style="color:#fde047;">🎯 {dynamic_k} / {target_k} chunks</div>
+        </div>
+        <div class="retrieval-cell">
+            <div class="rc-label">SEARCH SPEED</div>
+            <div class="rc-val" style="color:#6ee7b7;">⏱️ {retrieval_time} ms</div>
+        </div>
+        <div class="retrieval-cell">
+            <div class="rc-label">BOOKS CONSULTED</div>
+            <div class="rc-val" style="color:#93c5fd;">📚 {unique_books} books</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     if entities:
-        badge_html += '<br><div style="margin-top:6px; display:flex; align-items:center; flex-wrap:wrap; gap:4px;">'
-        badge_html += '<span style="color:#94a3b8; font-size:0.75rem;">Key Subjects:</span> '
-        for e in entities[:6]:
-            badge_html += f'<span class="entity-badge">{e}</span>'
-        if len(entities) > 6:
-            badge_html += f'<span class="entity-badge">+{len(entities)-6} more</span>'
-        badge_html += '</div>'
+        chips_html = '<div class="entity-chips-container"><span class="entity-chips-label">🎯 Key Subjects Detected:</span> '
+        for e in entities[:8]:
+            chips_html += f'<span class="entity-badge">{e}</span>'
+        if len(entities) > 8:
+            chips_html += f'<span class="entity-badge">+{len(entities)-8} more</span>'
+        chips_html += '</div>'
+        st.markdown(chips_html, unsafe_allow_html=True)
 
-    if book_dist and unique_books > 1:
-        badge_html += f' <div style="margin-top:4px;"><span class="cross-book-badge">📚 Cross-Book Synthesis ({unique_books} books)</span></div>'
 
-    badge_html += '</div>'
-    st.markdown(badge_html, unsafe_allow_html=True)
+def render_retrieved_passages(chunks: List[Dict[str, Any]], book_dist: Optional[Dict[str, int]] = None):
+    """Render expandable retrieved passages grouped by book with distance badges and distribution."""
+    if not chunks:
+        return
+
+    with st.expander(f"📜 View Retrieved Passages ({len(chunks)} chunks)", expanded=False):
+        if book_dist:
+            st.markdown("##### 📊 Library Passage Distribution")
+            render_book_distribution(book_dist)
+            st.divider()
+
+        book_groups = defaultdict(list)
+        for c in chunks:
+            book_groups[c.get("book_title", "Unknown Book")].append(c)
+
+        for book_title, group in book_groups.items():
+            st.markdown(f"**📖 {book_title}** &nbsp;•&nbsp; `{len(group)} passages`")
+            for item in group:
+                distance = item.get('distance', 0)
+                if distance < 0.38:
+                    dist_badge = f'<span class="source-distance distance-good">🟢 High Relevance (Dist: {distance:.3f})</span>'
+                    border_accent = "#10b981"
+                elif distance < 0.55:
+                    dist_badge = f'<span class="source-distance distance-med">🟡 Moderate (Dist: {distance:.3f})</span>'
+                    border_accent = "#f59e0b"
+                else:
+                    dist_badge = f'<span class="source-distance distance-bad">🔵 Contextual (Dist: {distance:.3f})</span>'
+                    border_accent = "#6366f1"
+
+                page_num = item.get("page") or item.get("page_number", "?")
+                text_snippet = item.get("text") or item.get("content", "")
+
+                st.markdown(
+                    f"""<div class="source-card" style="border-left: 3px solid {border_accent};">
+                    <div class="source-header">
+                        <span class="source-book">📄 Page {page_num}</span>
+                        {dist_badge}
+                    </div>
+                    <div class="source-text">{text_snippet}</div>
+                    </div>""",
+                    unsafe_allow_html=True,
+                )
+            st.divider()
 
 
 # ===================== Background Ingestion Banner Fragment =====================
@@ -626,6 +791,7 @@ def render_live_background_banner():
             elapsed_str, eta_str, pct_str = get_task_timing(t)
             pages_label = f"{t.get('total_pages', 0):,} pages" if t.get("total_pages") else ""
             stage_pill = f'<span class="loader-stage-pill">{t.get("stage", "Processing")}</span>'
+            pct_num = max(2.0, min(float(t.get("progress", 0.05)) * 100, 100.0))
 
             st.markdown(f"""
             <div class="loader-card">
@@ -639,6 +805,9 @@ def render_live_background_banner():
                     </div>
                 </div>
                 <div class="loader-step">{t.get('step', 'Processing...')}</div>
+                <div class="loader-progress-track">
+                    <div class="loader-progress-fill" style="width: {pct_num:.1f}%;"></div>
+                </div>
                 <div class="loader-timer-row">
                     <span>⏱️ Elapsed: <b>{elapsed_str}</b></span>
                     <span>⏳ Est. Remaining: <b>{eta_str}</b></span>
@@ -646,8 +815,6 @@ def render_live_background_banner():
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            prog = max(0.02, min(float(t.get("progress", 0.05)), 1.0))
-            st.progress(prog)
     else:
         if was_busy:
             st.session_state["_task_was_busy"] = False
@@ -700,23 +867,34 @@ for key, default in [
 
 # ===================== Sidebar =====================
 with st.sidebar:
-    st.markdown("## 📚 Knowledge Base")
-    st.caption("PostgreSQL + pgvector Vector Database")
-
+    st.markdown("## 📚 Library Knowledge Base")
     db_stats, pdf_info, indexed_map, pdf_chapters = get_system_state()
 
     total_pdfs = len([p for p in pdf_info if p["filename"] in pdf_chapters])
     total_chapters = sum(len(c) for c in pdf_chapters.values())
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Chunks", f"{db_stats['total_chunks']:,}")
-    with col2:
-        st.metric("PDFs", total_pdfs)
-    with col3:
-        st.metric("Chapters", total_chapters)
-
-    st.divider()
+    st.markdown(f"""
+    <div class="sidebar-stats-card">
+        <div class="stats-header">
+            <span><span class="stats-pulse-dot"></span>DB ONLINE</span>
+            <span class="stats-tag">pgvector</span>
+        </div>
+        <div class="stats-grid">
+            <div class="stats-item">
+                <div class="stats-num">{total_pdfs}</div>
+                <div class="stats-lbl">Books</div>
+            </div>
+            <div class="stats-item">
+                <div class="stats-num">{total_chapters}</div>
+                <div class="stats-lbl">Sections</div>
+            </div>
+            <div class="stats-item">
+                <div class="stats-num">{db_stats['total_chunks']:,}</div>
+                <div class="stats-lbl">Chunks</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     # --- Book Upload (Non-blocking background queue) ---
     st.markdown("### 📤 Upload Books")
@@ -766,14 +944,20 @@ with st.sidebar:
     if active_tasks_sidebar:
         cur_t = active_tasks_sidebar[0]
         el_str, eta_str, pct_str = get_task_timing(cur_t)
+        pct_num = max(2.0, min(float(cur_t.get("progress", 0.05)) * 100, 100.0))
         st.markdown(f"""
-        <div style="background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.35); border-radius:8px; padding:10px; margin-top:8px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:0.82rem; font-weight:600; color:#f5c542;">⏳ Indexing in Background</span>
-                <span style="font-size:0.75rem; font-weight:700; color:#38bdf8;">{pct_str}</span>
+        <div class="loader-card" style="margin-top:10px; padding:10px 12px;">
+            <div class="loader-header">
+                <span class="loader-title" style="font-size:0.82rem;">
+                    <span class="loader-pulse"></span> 📄 {cur_t['filename'][:24]}...
+                </span>
+                <span class="loader-pct-badge">{pct_str}</span>
             </div>
-            <div style="font-size:0.77rem; color:#e2e8f0; margin-top:3px; word-break:break-all;">📄 {cur_t['filename'][:28]}...</div>
-            <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#94a3b8; margin-top:6px; border-top:1px solid rgba(255,255,255,0.06); padding-top:4px;">
+            <div class="loader-step" style="font-size:0.75rem;">{cur_t.get('step', 'Processing...')}</div>
+            <div class="loader-progress-track" style="height:5px; margin:6px 0;">
+                <div class="loader-progress-fill" style="width:{pct_num:.1f}%;"></div>
+            </div>
+            <div class="loader-timer-row" style="margin-top:4px; font-size:0.7rem;">
                 <span>⏱️ {el_str}</span>
                 <span>⏳ ETA: {eta_str}</span>
             </div>
@@ -869,7 +1053,11 @@ with st.sidebar:
     # --- Library Management Expander ---
     with st.expander("📁 Library & Indexed Books", expanded=False):
         if pdf_info:
-            for p in pdf_info:
+            book_filter_q = st.text_input("🔍 Filter library books...", placeholder="Type to filter...", key="lib_filter_input")
+            filtered_pdfs = [p for p in pdf_info if not book_filter_q or book_filter_q.lower() in p["filename"].lower()]
+            display_pdfs = filtered_pdfs[:20]
+
+            for p in display_pdfs:
                 chapters = pdf_chapters.get(p["filename"], [])
                 is_indexed = len(chapters) > 0
                 status_class = "status-indexed" if is_indexed else "status-pending"
@@ -882,6 +1070,9 @@ with st.sidebar:
                     <div class="chapters">{len(chapters)} indexed section(s)</div>
                 </div>
                 """, unsafe_allow_html=True)
+
+            if len(filtered_pdfs) > 20:
+                st.caption(f"Showing 20 of {len(filtered_pdfs)} books. Use the filter above to search.")
         else:
             st.caption("No PDF files in `books/` folder.")
 
@@ -900,13 +1091,15 @@ with st.sidebar:
 
 
 # ===================== Main UI =====================
-st.markdown('<div class="app-title">📚 Multi-Book Story Assistant</div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="app-subtitle">'
-    'Ask questions across your story books. Answers are synthesized and strictly cited with exact book and page numbers.'
-    '</div>',
-    unsafe_allow_html=True,
-)
+st.markdown("""
+<div class="app-header-container">
+    <div class="app-badge-header">✨ AI-Powered Literary Research Engine</div>
+    <div class="app-title">Multi-Book Story Assistant</div>
+    <div class="app-subtitle">
+        Explore characters, trace chronological timelines, and synthesize insights across multiple books with exact page citations.
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # Live non-blocking background progress banner (Streamlit Fragment)
 render_live_background_banner()
@@ -928,12 +1121,19 @@ if db_stats["total_chunks"] == 0 and not ingestion_task_manager.is_busy():
     """, unsafe_allow_html=True)
 
 # Helpful suggested questions
-st.markdown("##### 💡 Try asking:")
+st.markdown("""
+<div class="suggestions-header">
+    <span class="suggestions-icon">💡</span>
+    <span class="suggestions-title">Explore Your Library</span>
+    <span class="suggestions-subtitle">• Click any prompt below to ask instantly</span>
+</div>
+""", unsafe_allow_html=True)
+
 sample_questions = [
-    ("👥 Characters", "List all main characters and their roles across the books"),
-    ("⚖️ Comparison", "Compare the protagonists, their motivations, and key differences"),
-    ("📅 Timeline", "What are the major chronological events across the story?"),
-    ("🎭 Themes", "What central themes and deeper meanings are explored in these books?"),
+    ("👥 Character Cast", "List all main characters and their roles across the books"),
+    ("⚖️ Cross-Book Compare", "Compare the protagonists, their motivations, and key differences"),
+    ("📅 Story Timeline", "What are the major chronological events across the story?"),
+    ("🎭 Central Themes", "What central themes and deeper meanings are explored in these books?"),
 ]
 s_cols = st.columns(len(sample_questions))
 for i, (label, q) in enumerate(sample_questions):
@@ -946,64 +1146,31 @@ st.divider()
 # ===================== Chat History =====================
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        if message["role"] == "assistant" and "meta" in message and message["meta"]:
-            m = message["meta"]
-            query_type = m.get("query_type", "UNKNOWN")
-
-            # Query type badge
+        meta = message.get("meta")
+        if message["role"] == "assistant" and meta:
+            query_type = meta.get("query_type", "UNKNOWN")
             qt_class = get_query_type_class(query_type)
             qt_label = get_query_type_label(query_type)
             st.markdown(f'<span class="query-type-badge {qt_class}">{qt_label}</span>', unsafe_allow_html=True)
 
-            # Quality indicator (Confidence Meter)
-            render_quality_indicator(m)
+        st.markdown(message["content"])
+
+        if message["role"] == "assistant" and meta:
+            # Quality indicator (Visual Confidence Meter)
+            render_quality_indicator(meta)
+
+            # Cross-book view
+            if meta.get("query_type") in ("COMPARISON", "TIMELINE") and message.get("chunks"):
+                render_cross_book_view(message["chunks"], meta.get("query_type"))
+
+            # Expandable sources
+            if message.get("chunks"):
+                book_dist = meta.get("book_distribution", {})
+                render_retrieved_passages(message["chunks"], book_dist)
 
             # Retrieval details inside progressive disclosure expander
             with st.expander("🔍 Retrieval Analytics & Entity Breakdown", expanded=False):
-                render_retrieval_metadata(m)
-
-        st.markdown(message["content"])
-
-        # Cross-book view
-        if "chunks" in message and message["chunks"] and "meta" in message:
-            meta = message["meta"]
-            if meta.get("query_type") in ("COMPARISON", "TIMELINE"):
-                render_cross_book_view(message["chunks"], meta.get("query_type"))
-
-        # Expandable sources
-        if "chunks" in message and message["chunks"]:
-            chunks = message["chunks"]
-            with st.expander(f"📜 View Retrieved Passages ({len(chunks)} chunks)"):
-                if "meta" in message and message["meta"]:
-                    book_dist = message["meta"].get("book_distribution", {})
-                    if book_dist:
-                        st.markdown("**📊 Book Distribution:**")
-                        render_book_distribution(book_dist)
-
-                st.divider()
-                book_groups = {}
-                for c in chunks:
-                    bt = c.get("book_title", "Unknown")
-                    book_groups.setdefault(bt, []).append(c)
-
-                for book_title, group in book_groups.items():
-                    st.markdown(f'**📘 {book_title}** ({len(group)} chunks)')
-                    for item in group:
-                        distance = item.get('distance', 0)
-                        dist_class = "distance-good" if distance < 0.4 else "distance-med" if distance < 0.55 else "distance-bad"
-                        page_num = item.get("page") or item.get("page_number", "?")
-                        text_snippet = item.get("text") or item.get("content", "")
-                        st.markdown(
-                            f"""<div class="source-card">
-                            <div class="source-header">
-                                <span class="source-book">Page {page_num}</span>
-                                <span class="source-distance {dist_class}">Distance: {distance:.4f}</span>
-                            </div>
-                            <div class="source-text">{text_snippet}</div>
-                            </div>""",
-                            unsafe_allow_html=True,
-                        )
-                    st.divider()
+                render_retrieval_metadata(meta)
 
 
 # ===================== Chat Input =====================
@@ -1048,6 +1215,12 @@ if active_question:
                         "chunks": []
                     })
                 else:
+                    # Query type badge shown upfront
+                    query_type = meta.get("query_type", "UNKNOWN")
+                    qt_class = get_query_type_class(query_type)
+                    qt_label = get_query_type_label(query_type)
+                    st.markdown(f'<span class="query-type-badge {qt_class}">{qt_label}</span>', unsafe_allow_html=True)
+
                     # Streaming answer
                     answer_placeholder = st.empty()
                     full_answer = ""
@@ -1056,53 +1229,20 @@ if active_question:
                         answer_placeholder.markdown(full_answer + "▌")
                     answer_placeholder.markdown(full_answer)
 
-                    # Query type badge
-                    query_type = meta.get("query_type", "UNKNOWN")
-                    qt_class = get_query_type_class(query_type)
-                    qt_label = get_query_type_label(query_type)
-                    st.markdown(f'<span class="query-type-badge {qt_class}">{qt_label}</span>', unsafe_allow_html=True)
-
-                    # Quality indicator (Confidence Meter)
+                    # Quality indicator (Visual Confidence Meter)
                     render_quality_indicator(meta)
-
-                    # Retrieval details inside progressive disclosure expander
-                    with st.expander("🔍 Retrieval Analytics & Entity Breakdown", expanded=False):
-                        render_retrieval_metadata(meta)
 
                     # Cross-book view
                     if meta.get("query_type") in ("COMPARISON", "TIMELINE"):
                         render_cross_book_view(matches, meta.get("query_type"))
 
                     # Expandable sources
-                    with st.expander(f"📜 View Retrieved Passages ({len(matches)} chunks)", expanded=False):
-                        book_dist = meta.get("book_distribution", {}) if meta else {}
-                        if book_dist:
-                            st.markdown("**📊 Book Distribution:**")
-                            render_book_distribution(book_dist)
-                        st.divider()
-                        book_groups = {}
-                        for c in matches:
-                            bt = c.get("book_title", "Unknown")
-                            book_groups.setdefault(bt, []).append(c)
+                    book_dist = meta.get("book_distribution", {}) if meta else {}
+                    render_retrieved_passages(matches, book_dist)
 
-                        for book_title, group in book_groups.items():
-                            st.markdown(f'**📘 {book_title}** ({len(group)} chunks)')
-                            for item in group:
-                                distance = item.get('distance', 0)
-                                dist_class = "distance-good" if distance < 0.4 else "distance-med" if distance < 0.55 else "distance-bad"
-                                page_num = item.get("page") or item.get("page_number", "?")
-                                text_snippet = item.get("text") or item.get("content", "")
-                                st.markdown(
-                                    f"""<div class="source-card">
-                                    <div class="source-header">
-                                        <span class="source-book">Page {page_num}</span>
-                                        <span class="source-distance {dist_class}">Distance: {distance:.4f}</span>
-                                    </div>
-                                    <div class="source-text">{text_snippet}</div>
-                                    </div>""",
-                                    unsafe_allow_html=True,
-                                )
-                            st.divider()
+                    # Retrieval details inside progressive disclosure expander
+                    with st.expander("🔍 Retrieval Analytics & Entity Breakdown", expanded=False):
+                        render_retrieval_metadata(meta)
 
                     # Save message
                     st.session_state.messages.append({
