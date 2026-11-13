@@ -84,57 +84,46 @@ streamlit run app.py
 - **Thematic**: "Explain how the magic system works"
 - **Factual**: "What is the capital city?"
 
-## Architecture
+## Architecture & LangChain Engine
 
 ```
-app.py              # Streamlit UI, chat interface, book management
-├── retrieval.py    # Query analysis, Dynamic K, search strategies
-├── ingest.py       # PDF extraction, chunking, embedding, indexing
-└── database.py     # PostgreSQL + pgvector operations
+app.py                  # Streamlit UI (Chat interface, Confidence Meter, Citations)
+├── rag_engine.py       # Core LangChain Engine (VectorStore, LCEL Chain, Ingestion)
+│   ├── NemotronEmbeddings    # LangChain Embeddings with NVIDIA input_type support
+│   ├── PostgresPGVectorStore # LangChain VectorStore adapter (Zero re-index needed)
+│   ├── rag_chain             # LCEL Prompt | ChatOpenAI | StrOutputParser
+│   └── ingest_pdf_file       # PyPDFLoader + RecursiveCharacterTextSplitter
+├── database.py         # PostgreSQL connection & pgvector schema
+└── test_retrieval.py   # Regression tests & LangChain compatibility checks
 ```
 
-## Retrieval Strategies
-
-| Query Type | Dynamic K | Strategy | Description |
-|------------|-----------|----------|-------------|
-| LISTING | 21 | stratified_multi_book | ~3 chunks/book across all books |
-| COMPARISON | 20 | entity_comparison | Sub-queries per entity, merged |
-| TIMELINE | 18 | entity_timeline | Entity-stratified chronological |
-| THEMATIC | 10 | hybrid_precision | Vector + FTS with RRF |
-| FACTUAL | 5 | hybrid_precision | High precision + gap pruning |
-
-## Book Manager
-
-Click "🗂️ Manage Indexed Books" in the sidebar to:
-- View all indexed books with stats
-- Delete individual books
-- Clear all data (with confirmation)
+### LangChain Components
+- **Unified VectorStore Adapter (`rag_engine.py`)**: `PostgresPGVectorStore` wraps your existing `document_chunks` table, allowing LangChain to query all 10,850+ indexed chunks instantly without re-indexing.
+- **LCEL Streaming Chain (`rag_engine.py`)**: `ChatPromptTemplate | ChatOpenAI | StrOutputParser` streaming responses with citation grounding.
+- **Recursive Text Splitting (`rag_engine.py` / `ingest.py`)**: `RecursiveCharacterTextSplitter` splitting documents on semantic boundaries (`\n\n`, `\n`, sentence endings).
+- **LangChain Retriever (`retrieval.py`)**: `MultiBookRetriever(BaseRetriever)` returning standardized `Document` objects with rich metadata for use across any LangChain or LangGraph pipeline.
 
 ## Project Structure
 
 ```
 .
-├── app.py              # Main Streamlit application
-├── database.py         # Database layer (PostgreSQL + pgvector)
-├── ingest.py           # PDF ingestion pipeline
-├── retrieval.py        # Smart retrieval with Dynamic K
-├── requirements.txt    # Python dependencies
-├── .env                # Configuration (create from .env.example)
-├── books/              # PDF storage (gitignored)
-├── chroma_db/          # Legacy ChromaDB (unused)
-└── test_*.py          # Test scripts
+├── app.py                      # Main Streamlit application + LangChain LCEL
+├── rag_engine.py               # Core LangChain RAG pipeline (Option 2 Hybrid Adapter)
+├── database.py                 # Database layer (PostgreSQL + pgvector)
+├── ingest.py                   # PDF ingestion & LangChain text splitter
+├── retrieval.py                # Smart retrieval & LangChain MultiBookRetriever
+├── test_retrieval.py           # Verification script for query understanding
+├── requirements.txt            # Python dependencies (Streamlit, pgvector, LangChain)
+├── .env                        # Configuration (NVIDIA NIM & PostgreSQL credentials)
+├── books/                      # PDF storage directory
+├── README.md                   # Quickstart and overview guide
+└── RAG_SYSTEM_DOCUMENTATION.md # Full architecture & system reference
 ```
 
 ## Testing
 
 ```bash
-# Test database connection
-python test_db.py
-
-# Test vector operations
-python test_vector.py
-
-# Test query analysis (no DB needed)
+# Test query analysis and LangChain retriever instantiation (no DB connection required)
 python test_retrieval.py
 ```
 

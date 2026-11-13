@@ -22,9 +22,11 @@ from ingest import (
     get_task_timing,
     MAX_PDF_PAGES,
 )
-from retrieval import (
-    smart_retrieve,
-    get_query_suggestions,
+from rag_engine import (
+    execute_rag_query,
+    ingest_pdf_file,
+    vectorstore,
+    rag_chain,
 )
 
 load_dotenv()
@@ -46,36 +48,50 @@ st.set_page_config(
     menu_items={
         'Get Help': None,
         'Report a bug': None,
-        'About': "Multi-Book RAG Assistant - Query across multiple story books with intelligent retrieval"
+        'About': "Multi-Book RAG Assistant - LangChain RAG with pgvector Hybrid Search"
     }
 )
 
-# ===================== Enhanced CSS =====================
+# ===================== Enhanced CSS & Icon Protection =====================
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+
 /* ===== LAYOUT & CORE THEME ===== */
 .block-container { max-width: 1200px; padding-top: 1.2rem !important; padding-bottom: 3rem !important; }
-body, p, h1, h2, h3, h4, h5, h6, input, textarea {
+
+/* Apply typography strictly to content containers to avoid breaking Streamlit ligature icons */
+p, h1, h2, h3, h4, h5, h6, input, textarea, .stMarkdown, .dist-meta, .rc-label, .rc-val {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-/* ===== PROTECT STREAMLIT ICON FONTS (CRITICAL FOR LIGATURES) ===== */
+/* ===== PROTECT STREAMLIT ICON FONTS (CRITICAL FOR EXPANDERS & UPLOADERS) ===== */
 [data-testid*="Icon"],
 [data-testid*="stIcon"],
+[data-testid*="ToggleIcon"],
+[data-testid*="stExpanderToggleIcon"],
 .material-symbols-rounded,
-.material-symbols-outlined,
-[class*="material-symbols"],
-[class*="stIcon"] {
-    font-family: "Material Symbols Rounded", "Material Symbols Outlined" !important;
+.material-symbols-outlined {
+    font-family: "Material Symbols Rounded" !important;
     font-style: normal !important;
     font-weight: normal !important;
+    font-size: 20px !important;
+    line-height: 1 !important;
     text-transform: none !important;
     letter-spacing: normal !important;
     word-wrap: normal !important;
     white-space: nowrap !important;
     direction: ltr !important;
-    -webkit-font-feature-settings: 'liga' !important;
+    font-feature-settings: 'liga' 1 !important;
+    -webkit-font-feature-settings: 'liga' 1 !important;
     -webkit-font-smoothing: antialiased !important;
+}
+
+/* Fix dropzone upload button ligature text collision ("uploadUpload") */
+[data-testid="stFileUploaderDropzone"] [data-testid="stIconMaterial"] {
+    font-family: "Material Symbols Rounded" !important;
+    font-size: 22px !important;
+    margin-right: 4px;
 }
 
 /* ===== SIDEBAR ===== */
@@ -392,8 +408,6 @@ if not NVIDIA_API_KEY:
     st.error("❌ Missing NVIDIA_API_KEY in .env file. Please add it and restart the app.")
     st.stop()
 
-client = OpenAI(base_url=NVIDIA_BASE_URL, api_key=NVIDIA_API_KEY)
-
 try:
     init_db()
 except Exception as db_err:
@@ -462,110 +476,6 @@ STRATEGY_HUMAN_LABELS = {
     "thematic_exploration": "Deep Thematic Exploration",
     "hybrid_precision": "Hybrid Precision & Vector Search",
 }
-
-
-def generate_answer_streaming(
-    question: str,
-    retrieved_chunks: List[Dict[str, Any]],
-    query_meta: Optional[Dict[str, Any]] = None,
-):
-    """Generate streaming answer from retrieved chunks with structured multi-book framing."""
-    if not retrieved_chunks:
-        yield "I couldn't find relevant passages in the indexed books to answer this question."
-        return
-
-    # Group passages by book title so the LLM has explicit narrative boundaries
-    grouped_chunks = defaultdict(list)
-    for idx, item in enumerate(retrieved_chunks, start=1):
-        grouped_chunks[item.get("book_title", "Unknown Book")].append((idx, item))
-
-    context_sections = []
-    for book_title, items in grouped_chunks.items():
-        passages_text = []
-        for idx, item in items:
-            page_num = item.get("page") or item.get("page_number", "?")
-            snippet = item.get("text") or item.get("content", "")
-            passages_text.append(f"[Excerpt {idx} | Page {page_num}]:\n{snippet}")
-        context_sections.append(f"### 📖 BOOK: {book_title}\n" + "\n\n".join(passages_text))
-
-    context = "\n\n---\n\n".join(context_sections)
-    query_type = query_meta.get("query_type", "FACTUAL") if query_meta else "FACTUAL"
-
-    if query_type == "LISTING":
-        type_instructions = """
-SPECIAL INSTRUCTIONS FOR LISTINGS:
-- Identify ALL items, people, associates, or concepts mentioned across the provided excerpts.
-- Group the response logically (e.g., by book, by allegiance/relationship, or by role).
-- For each entry, provide their role or significance and cite the source [Book Title, Page X].
-- Be thorough and synthesize data across all represented books.
-"""
-        max_tokens = 1800
-    elif query_type == "COMPARISON":
-        type_instructions = """
-SPECIAL INSTRUCTIONS FOR COMPARISONS:
-- Present a structured cross-book comparison between the subjects.
-- Use clear sections:
-  1. Key Parallels & Similarities
-  2. Core Differences & Divergences
-  3. Character Arcs & Motivations per Book/Subject
-- Back each point with specific textual citations [Book Title, Page X].
-- Maintain clear distinctions between different books and characters.
-"""
-        max_tokens = 1800
-    elif query_type == "TIMELINE":
-        type_instructions = """
-SPECIAL INSTRUCTIONS FOR TIMELINES & ARCS:
-- Chronologically trace major events, decisions, turning points, and consequences.
-- Detail the progression from early events to climactic moments across the stories.
-- Cite each event with [Book Title, Page X].
-"""
-        max_tokens = 1700
-    elif query_type == "THEMATIC":
-        type_instructions = """
-SPECIAL INSTRUCTIONS FOR THEMATIC ANALYSIS:
-- Explore the deeper meanings, symbolism, motifs, and underlying messages.
-- Synthesize thematic evidence across all represented stories.
-- Cite specific textual evidence [Book Title, Page X].
-"""
-        max_tokens = 1600
-    else:
-        type_instructions = """
-- Answer the question directly and factually based on the excerpts.
-- Provide supporting context and cite specific book titles and page numbers [Book Title, Page X].
-- If a specific detail is not in the excerpts, explicitly state that it is not mentioned.
-"""
-        max_tokens = 1200
-
-    system_prompt = f"""You are an expert literary research assistant with deep analytical capabilities across multi-book libraries.
-Answer questions accurately and comprehensively based strictly on the provided book excerpts.
-
-Core Principles:
-1. Strict Grounding: Rely solely on facts and events from the excerpts. Never hallucinate outside assumptions.
-2. Cross-Book Synthesis: When questions involve multiple books or characters, maintain clear distinctions between worlds and synthesize them thoroughly.
-3. Citations: Support every claim with citations in the format [Book Title, Page X].
-4. Transparency: If a requested detail is not found in the excerpts, state so explicitly.
-
-{type_instructions}"""
-
-    user_prompt = f"Book Context (organized by book):\n\n{context}\n\nQuestion: {question}"
-
-    stream = client.chat.completions.create(
-        model=CHAT_MODEL,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.4,
-        max_tokens=max_tokens,
-        stream=True,
-    )
-
-    for chunk in stream:
-        try:
-            if chunk.choices and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
-        except (IndexError, AttributeError):
-            continue
 
 
 def render_book_distribution(book_dist: Dict[str, int], max_items: int = 10):
@@ -640,10 +550,11 @@ def render_cross_book_view(chunks: List[Dict[str, Any]], query_type: str):
 
 def render_quality_indicator(meta: Dict[str, Any]):
     """Render answer quality indicator with a visual confidence meter."""
-    confidence = meta.get("confidence", 0)
-    unique_books = meta.get("unique_books_retrieved", 0)
-    book_count = meta.get("book_count", 1)
-    coverage = meta.get("coverage_pct", 0)
+    confidence = meta.get("confidence", 0.0)
+    unique_books = meta.get("unique_books", meta.get("unique_books_retrieved", 1))
+    book_dist = meta.get("book_distribution", {})
+    book_count = meta.get("book_count", max(1, len(book_dist), unique_books))
+    coverage = meta.get("coverage_pct", min(100.0, (unique_books / max(1, book_count)) * 100))
     pct_val = max(5, min(100, int(confidence * 100)))
 
     if confidence > 0.65 and coverage > 40:
@@ -688,13 +599,13 @@ def render_quality_indicator(meta: Dict[str, Any]):
 
 def render_retrieval_metadata(meta: Dict[str, Any]):
     """Render structured retrieval details pill with modern metrics and entity chips."""
-    raw_strategy = meta.get("strategy", "unknown")
-    strategy_label = STRATEGY_HUMAN_LABELS.get(raw_strategy, raw_strategy.replace("_", " ").title())
-    dynamic_k = meta.get("dynamic_k", 0)
-    target_k = meta.get("target_k", 0)
+    raw_strategy = meta.get("strategy", "Hybrid RRF (LangChain)")
+    strategy_label = STRATEGY_HUMAN_LABELS.get(raw_strategy, raw_strategy)
+    dynamic_k = meta.get("dynamic_k", meta.get("k", 0))
+    target_k = meta.get("target_k", meta.get("k", dynamic_k))
     entities = meta.get("entities", [])
     confidence = meta.get("confidence", 0)
-    unique_books = meta.get("unique_books_retrieved", 0)
+    unique_books = meta.get("unique_books", meta.get("unique_books_retrieved", 1))
     retrieval_time = meta.get("retrieval_time_ms", 0)
 
     st.markdown(f"""
@@ -1195,14 +1106,15 @@ if active_question:
         else:
             try:
                 scope_desc = selected_scope if selected_scope != "All Books" else "all books"
-                with st.spinner(f"🔍 Analyzing query and retrieving across {scope_desc}..."):
-                    matches, meta = smart_retrieve(
+                k_val = manual_k_val or 12
+                with st.spinner(f"🔍 LangChain retrieving and analyzing across {scope_desc}..."):
+                    stream, docs_with_scores, meta = execute_rag_query(
                         question=active_question,
                         book_filter=filter_param,
-                        manual_k=manual_k_val,
+                        k=k_val,
                     )
 
-                if not matches:
+                if not docs_with_scores:
                     no_results_msg = (
                         "I couldn't find any relevant passages in the indexed books for your question. "
                         "Try rephrasing your question, selecting a different search scope, or adding more books."
@@ -1216,15 +1128,12 @@ if active_question:
                     })
                 else:
                     # Query type badge shown upfront
-                    query_type = meta.get("query_type", "UNKNOWN")
-                    qt_class = get_query_type_class(query_type)
-                    qt_label = get_query_type_label(query_type)
-                    st.markdown(f'<span class="query-type-badge {qt_class}">{qt_label}</span>', unsafe_allow_html=True)
+                    st.markdown('<span class="query-type-badge query-type-listing">⚡ LangChain LCEL RAG</span>', unsafe_allow_html=True)
 
-                    # Streaming answer
+                    # Streaming answer directly from LangChain chain
                     answer_placeholder = st.empty()
                     full_answer = ""
-                    for chunk in generate_answer_streaming(active_question, matches, meta):
+                    for chunk in stream:
                         full_answer += chunk
                         answer_placeholder.markdown(full_answer + "▌")
                     answer_placeholder.markdown(full_answer)
@@ -1232,17 +1141,49 @@ if active_question:
                     # Quality indicator (Visual Confidence Meter)
                     render_quality_indicator(meta)
 
-                    # Cross-book view
-                    if meta.get("query_type") in ("COMPARISON", "TIMELINE"):
-                        render_cross_book_view(matches, meta.get("query_type"))
+                    # Convert docs_with_scores to chunk format for rendering
+                    matches = []
+                    for doc, dist in docs_with_scores:
+                        matches.append({
+                            "book_title": doc.metadata.get("book_title", "Unknown"),
+                            "filename": doc.metadata.get("filename", ""),
+                            "page": doc.metadata.get("page_number", "?"),
+                            "chunk_index": doc.metadata.get("chunk_index", 0),
+                            "text": doc.page_content,
+                            "content": doc.page_content,
+                            "distance": dist,
+                        })
+
+                    # Cross-book view if multiple books represented
+                    if meta.get("unique_books", 1) > 1:
+                        render_cross_book_view(matches, "COMPARISON")
 
                     # Expandable sources
-                    book_dist = meta.get("book_distribution", {}) if meta else {}
+                    book_dist = meta.get("book_distribution", {})
                     render_retrieved_passages(matches, book_dist)
 
                     # Retrieval details inside progressive disclosure expander
-                    with st.expander("🔍 Retrieval Analytics & Entity Breakdown", expanded=False):
-                        render_retrieval_metadata(meta)
+                    with st.expander("🔍 Retrieval Analytics & Framework", expanded=False):
+                        st.markdown(f"""
+                        <div class="retrieval-grid">
+                            <div class="retrieval-cell">
+                                <div class="rc-label">FRAMEWORK</div>
+                                <div class="rc-val" style="color:#a5b4fc;">⚡ LangChain LCEL</div>
+                            </div>
+                            <div class="retrieval-cell">
+                                <div class="rc-label">PASSAGES</div>
+                                <div class="rc-val" style="color:#fde047;">🎯 {len(matches)} chunks</div>
+                            </div>
+                            <div class="retrieval-cell">
+                                <div class="rc-label">SEARCH SPEED</div>
+                                <div class="rc-val" style="color:#6ee7b7;">⏱️ {meta.get('retrieval_time_ms', 0)} ms</div>
+                            </div>
+                            <div class="retrieval-cell">
+                                <div class="rc-label">BOOKS CONSULTED</div>
+                                <div class="rc-val" style="color:#93c5fd;">📚 {meta.get('unique_books', 1)} books</div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
                     # Save message
                     st.session_state.messages.append({

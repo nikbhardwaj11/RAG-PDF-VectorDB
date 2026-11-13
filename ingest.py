@@ -112,12 +112,50 @@ def create_embeddings(
     return vectors
 
 
+# ===================== LangChain Embeddings Compatibility =====================
+try:
+    from langchain_core.embeddings import Embeddings
+
+    class NemotronEmbeddings(Embeddings):
+        """
+        LangChain-compatible Embeddings implementation for NVIDIA Nemotron.
+        Enables seamless integration with LangChain vector stores and retrievers.
+        """
+        def __init__(self, embed_model: str = EMBED_MODEL):
+            self.model = embed_model
+
+        def embed_documents(self, texts: List[str]) -> List[List[float]]:
+            return create_embeddings(texts, input_type="passage")
+
+        def embed_query(self, text: str) -> List[float]:
+            vecs = create_embeddings([text], input_type="query")
+            return vecs[0] if vecs else []
+except ImportError:
+    class NemotronEmbeddings:  # type: ignore
+        """Fallback placeholder when langchain_core is not installed."""
+        def __init__(self, *args, **kwargs):
+            pass
+
+
 # ===================== PDF Text Extraction & Chunking =====================
+# Initialize LangChain RecursiveCharacterTextSplitter for paragraph-aware splits
+try:
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    _splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+        length_function=len,
+        separators=["\n\n", "\n", ". ", " ", ""],
+    )
+except ImportError:
+    _splitter = None
+
+
 def chunk_pages(pages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Split extracted page text into overlapping chunks of CHUNK_SIZE characters.
-
-    Overlapping helps preserve context that might be cut at chunk boundaries.
+    Uses LangChain RecursiveCharacterTextSplitter for natural paragraph & sentence boundaries,
+    with a robust fallback to character sliding window.
 
     Args:
         pages: list of {"page": int, "text": str} dicts from PDF extraction.
@@ -127,17 +165,27 @@ def chunk_pages(pages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     chunks = []
     for page_record in pages:
-        text = page_record["text"]
-        start = 0
-        while start < len(text):
-            end = start + CHUNK_SIZE
-            chunk_text = text[start:end].strip()
-            if chunk_text:
-                chunks.append({"text": chunk_text, "page": page_record["page"]})
-            if end >= len(text):
-                break
-            # Move start position, accounting for overlap
-            start = end - CHUNK_OVERLAP
+        text = page_record.get("text", "")
+        if not text or not text.strip():
+            continue
+
+        if _splitter is not None:
+            sub_chunks = _splitter.split_text(text)
+            for sc in sub_chunks:
+                sc_clean = sc.strip()
+                if sc_clean:
+                    chunks.append({"text": sc_clean, "page": page_record["page"]})
+        else:
+            # Fallback sliding window
+            start = 0
+            while start < len(text):
+                end = start + CHUNK_SIZE
+                chunk_text = text[start:end].strip()
+                if chunk_text:
+                    chunks.append({"text": chunk_text, "page": page_record["page"]})
+                if end >= len(text):
+                    break
+                start = end - CHUNK_OVERLAP
     return chunks
 
 

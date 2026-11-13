@@ -68,6 +68,8 @@ def init_db():
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
             # Main chunks table
+            # NOTE: We use vector(1024) to exactly match nvidia/nemotron-3.5-embed-1b.
+            # Using 2048 here would cause a fatal Postgres dimension mismatch error on inserts!
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS document_chunks (
                     id BIGSERIAL PRIMARY KEY,
@@ -77,18 +79,19 @@ def init_db():
                     page_number INTEGER NOT NULL,
                     chunk_index INTEGER NOT NULL,
                     content TEXT NOT NULL,
-                    embedding vector(2048),
+                    embedding vector(1024),
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
             """)
 
-            # B-tree indexes for filtering
+            # B-tree indexes for fast filtering by book, file, and page
             cur.execute("CREATE INDEX IF NOT EXISTS idx_doc_chunks_source ON document_chunks(source_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_doc_chunks_filename ON document_chunks(filename);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_doc_chunks_book_title ON document_chunks(book_title);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_doc_chunks_page ON document_chunks(page_number);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_doc_chunks_book_file ON document_chunks(book_title, filename);")
 
-            # GIN index for full-text search
+            # GIN index for full-text search (BM25 keyword search)
             try:
                 cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_doc_chunks_fts
@@ -97,11 +100,11 @@ def init_db():
             except Exception as fts_err:
                 print(f"Notice: FTS index error: {fts_err}")
 
-            # HNSW index for approximate vector search (halfvec for memory)
+            # HNSW index for high-speed approximate vector cosine search (halfvec cuts RAM in half)
             try:
                 cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_doc_chunks_halfvec
-                    ON document_chunks USING hnsw ((embedding::halfvec(2048)) halfvec_cosine_ops)
+                    ON document_chunks USING hnsw ((embedding::halfvec(1024)) halfvec_cosine_ops)
                     WITH (m = 16, ef_construction = 128);
                 """)
             except Exception as idx_err:
@@ -264,8 +267,15 @@ def search_chunks_hybrid(
     candidate_multiplier: int = DEFAULT_CANDIDATE_MULTIPLIER,
 ) -> List[Dict[str, Any]]:
     """
-    Hybrid search with Reciprocal Rank Fusion (RRF).
-    Combines vector similarity and full-text search with resilient OR-fallback.
+    Hybrid Search combining Dense Vector Cosine Similarity + Sparse Full-Text (BM25)
+    using Reciprocal Rank Fusion (RRF).
+
+    Why RRF?
+    - Dense vector search is great for semantic concepts, but can miss rare names or exact terms.
+    - Full-text search (GIN index) is fast and exact for specific character names and places.
+    - RRF combines their relative ranks: RRF_Score = 1/(60 + vec_rank) + 1/(60 + fts_rank).
+      This avoids score normalization issues (cosine distance vs BM25 score) and guarantees
+      passages relevant in both methods rise to the top.
     """
     conn = get_connection()
     try:
@@ -279,7 +289,7 @@ def search_chunks_hybrid(
                 "rrf_k": RRF_CONSTANT,
             }
 
-            # Candidate filter: chunks matching vector distance threshold OR full-text query
+            # Candidate filter: retrieve chunks that match vector similarity OR contain keyword
             candidate_conds = [
                 "((embedding <=> %(q_vec)s::vector) < 0.85 OR to_tsvector('english', content) @@ websearch_to_tsquery('english', %(fts_q)s))"
             ]
@@ -290,6 +300,7 @@ def search_chunks_hybrid(
             where_sql, filter_params = _build_filter_conditions(book_filter, candidate_conds)
             params.update(filter_params)
 
+            # CTE calculates individual ranks, then combines them via RRF
             query = f"""
                 WITH candidates AS (
                     SELECT id, filename, book_title, page_number, chunk_index, content,
@@ -310,7 +321,7 @@ def search_chunks_hybrid(
             cur.execute(query, params)
             rows = cur.fetchall()
 
-            # Fallback to pure vector if hybrid returns nothing
+            # Resilient fallback: if hybrid filter yielded no results, fall back to pure vector search
             if not rows:
                 return search_chunks(query_vector, top_k, book_filter, max_distance)
 

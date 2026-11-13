@@ -930,3 +930,54 @@ def get_query_suggestions(query_type: str = None) -> List[Tuple[str, str]]:
     for v in suggestions.values():
         all_sugg.extend(v)
     return all_sugg[:5]
+
+
+# ===================== LangChain BaseRetriever Wrapper =====================
+try:
+    from langchain_core.retrievers import BaseRetriever
+    from langchain_core.documents import Document
+    from pydantic import Field
+
+    class MultiBookRetriever(BaseRetriever):
+        """
+        LangChain-compatible Retriever wrapping the Multi-Book Dynamic K engine.
+        Outputs standard LangChain Document objects, enabling seamless integration
+        with LangChain chains, agents, LangGraph, and RAG evaluation tools.
+        """
+        book_filter: Optional[str] = Field(default=None, description="Optional single-book filename filter")
+        manual_k: Optional[int] = Field(default=None, description="Optional manual override for K chunk count")
+
+        class Config:
+            arbitrary_types_allowed = True
+
+        def _get_relevant_documents(self, query: str) -> List[Document]:
+            matches, meta = smart_retrieve(
+                question=query,
+                book_filter=self.book_filter,
+                manual_k=self.manual_k,
+            )
+            docs = []
+            for m in matches:
+                content = m.get("text") or m.get("content", "")
+                metadata = {
+                    "book_title": m.get("book_title", "Unknown"),
+                    "filename": m.get("filename", ""),
+                    "page": m.get("page") or m.get("page_number", 0),
+                    "chunk_index": m.get("chunk_index", 0),
+                    "distance": m.get("distance", 0.0),
+                    "query_type": meta.get("query_type", "FACTUAL"),
+                    "strategy": meta.get("strategy", ""),
+                }
+                docs.append(Document(page_content=content, metadata=metadata))
+            return docs
+
+except ImportError:
+    class MultiBookRetriever:  # type: ignore
+        """Fallback placeholder when langchain_core is not installed."""
+        def __init__(self, book_filter: Optional[str] = None, manual_k: Optional[int] = None):
+            self.book_filter = book_filter
+            self.manual_k = manual_k
+
+        def get_relevant_documents(self, query: str):
+            matches, _ = smart_retrieve(query, book_filter=self.book_filter, manual_k=self.manual_k)
+            return matches

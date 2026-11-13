@@ -6,7 +6,26 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
-from retrieval import smart_retrieve, classify_query, extract_entities
+from retrieval import smart_retrieve, classify_query, extract_entities, MultiBookRetriever
+
+
+def test_langchain_retriever_instantiation():
+    """Verify that the LangChain MultiBookRetriever and rag_engine instantiate cleanly."""
+    print("=" * 60)
+    print("LANGCHAIN COMPATIBILITY TEST")
+    print("=" * 60)
+    try:
+        retriever = MultiBookRetriever(book_filter=None, manual_k=10)
+        print(f"[OK] MultiBookRetriever instantiated successfully: {retriever}")
+    except Exception as e:
+        print(f"[FAIL] MultiBookRetriever failed to instantiate: {e}")
+
+    try:
+        from rag_engine import vectorstore, rag_chain
+        print("[OK] rag_engine (PostgresPGVectorStore + LCEL chain) loaded successfully!")
+    except Exception as e:
+        print(f"[FAIL] rag_engine load failed: {e}")
+    print()
 
 
 def test_query_analysis():
@@ -87,6 +106,9 @@ def test_smart_retrieve(question: str, book_filter: str = None, manual_k: int = 
 if __name__ == "__main__":
     # Test query analysis first
     test_query_analysis()
+
+    # Test LangChain Retriever instantiation
+    test_langchain_retriever_instantiation()
 
     # Test retrieval (requires indexed books)
     # Uncomment and add your own test questions after indexing books:
